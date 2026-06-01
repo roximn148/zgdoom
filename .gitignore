@@ -1,0 +1,28 @@
+## /////////////////////////////////////////////////////////////////////////////
+##  Copyright (c) 2026 RoXimn
+## This software is released under the MIT License.
+## /////////////////////////////////////////////////////////////////////////////# Zig build artifacts
+zig-out/
+zig-cache/
+zig-pkg/
+.zig-cache/
+
+# Package management local stores
+.zig-dependencies/
+
+# === Visual Studio Code Specifics ===
+.vscode/*
+
+# Ignore local history and workspace states created by VS Code extensions
+.history/
+*.code-workspace
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# Other common text editors
+.idea/
+*.swp
+*.swo
+*~
