@@ -13,14 +13,28 @@ using the **Raylib** library.
 The goal of this project is to parse the internal structures of a DOOM map file (WAD)
 from scratch, map out the layout coordinates, and draw the results safely onto the screen [WAD].
 
-### Current Progress & Key Learning Pillars
-- [x] **Custom Error Handling**: Managing custom file parsing failures using Zig's explicit error sets (`!`).
-- [x] **Manual Allocation**: Wrapping `std.heap.DebugAllocator` to track memory ownership and trace leaks cleanly.
-- [x] **Data Manipulation**: Traversing arrays by pointer/reference (`|*item|`) to update dynamically generated game lump indices.
-- [x] **Boundary Calculations**: COnverting and displaying different coordinate maps.
-- [ ] **Raylib Integration**: Hooking up the engine loop to render parsed lines and vertices onto a 2D viewport [Raylib].
-
----
+### Current Progress & Key Takeaways
+- **Error Handling**:
+    - [x] Managing errors using try, catch, and switch blocks.
+    - [x] Creating and raising custom error.
+    - [ ] Implementing error sets.
+- **Heap Allocation**:
+    - [x] Tracking memory allocation lifespans, leaks and ownership using `std.heap.DebugAllocator`.
+    - [x] Casting generic allocated buffers into structs and slices.
+    - [x] Returning allocated arrays and structs from functions to callers.
+    - [x] Passing dynamic arrays into functions for reading and editing.
+- **Data Manipulation**:
+    - [x] Defining, allocating and modifying `struct`s.
+    - [x] Reading structs from `File` streams.
+    - [x] Writing formatted output to `File` streams, including stdout.
+- **Dependency Management**
+    - [x] Adding and linking external dependency modules.
+- **Command Line Arguments**
+    - [x] Adding and managing command-line arguments.
+- **Raylib**:
+    - [x] Conversion from DOOM world coordinate system to screen coordinate system.
+    - [x] Map rendering in 2D using the Raylib engine.
+    - [x] Basic UI overlay, keyboard and mouse interactive navigation.
 
 ## 📁 Repository Structure
 
@@ -28,6 +42,7 @@ from scratch, map out the layout coordinates, and draw the results safely onto t
 ├── src/
 │   ├── main.zig          # Application entry point & memory allocation setup
 │   └── doom.zig          # Byte parsing and dumping logic, Lump structs
+│   └── utils.zig         # Miscellaneous supporting functions
 ├── build.zig             # Zig native compilation instructions
 ├── build.zig.zon         # Package manager settings (Raylib dependencies)
 ├── .gitignore            # Clean environment configurations for Zig and VS Code
