@@ -182,89 +182,103 @@ pub fn drawWadMap(
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+const Alignment = enum {
+    left,
+    center,
+    right,
+};
+
+const UiText = struct {
+    const Self = @This();
+
+    uiWidth: f32,
+    uiHeight: f32,
+    font: rl.Font,
+    fontSize: f32,
+    padding: f32,
+    charSpacing: f32,
+    lineSpacing: f32,
+    textColor: rl.Color,
+
+    fn draw(
+        self: Self,
+        comptime txt: []const u8,
+        params: anytype,
+        lineNum: f32,
+        alignment: Alignment,
+    ) !void {
+        var localBuffer: [256]u8 = undefined;
+        const formattedText: [:0]u8 = try std.fmt.bufPrintSentinel(
+            &localBuffer,
+            txt,
+            params,
+            0,
+        );
+        const textSize = rl.measureTextEx(
+            self.font,
+            formattedText,
+            self.fontSize,
+            self.charSpacing,
+        );
+        const x: f32 = switch (alignment) {
+            .left => 0.0,
+            .center => (self.uiWidth - textSize.x) / 2.0,
+            .right => self.uiWidth - textSize.x,
+        };
+        const y: f32 = lineNum * (textSize.y + self.lineSpacing);
+
+        rl.drawTextEx(
+            self.font,
+            formattedText,
+            rl.Vector2{
+                .x = self.padding + x,
+                .y = self.padding + y,
+            },
+            self.fontSize,
+            self.charSpacing,
+            self.textColor,
+        );
+    }
+};
+
+////////////////////////////////////////////////////////////////////////////////
 pub fn drawUi(
     customFont: rl.Font,
     mapNum: usize,
     mapCount: usize,
     lineCount: usize,
 ) !void {
-    const fontSize = 20;
-    const padding = 10;
-    const lineSpacing = 5;
-    const textColor = rl.Color.gold;
-    const screenWidth = @as(f32, @floatFromInt(rl.getScreenWidth()));
+    const margin = 10.0;
+    var text = UiText{
+        .uiWidth = @as(f32, @floatFromInt(rl.getScreenWidth())) - margin * 2.0,
+        .uiHeight = @as(f32, @floatFromInt(rl.getScreenHeight())) - margin * 2.0,
+        .font = customFont,
+        .fontSize = 20.0,
+        .padding = margin,
+        .charSpacing = 1.0,
+        .lineSpacing = 5.0,
+        .textColor = rl.Color.gold,
+    };
 
-    var buffer: [256]u8 = undefined;
-    var formattedText = try std.fmt.bufPrintZ(
-        &buffer,
+    try text.draw(
         "ZgDoom",
         .{},
-    );
-    var textSize = rl.measureTextEx(
-        customFont,
-        formattedText,
-        fontSize,
-        lineSpacing,
-    );
-    var position = rl.Vector2{
-        .x = padding,
-        .y = padding,
-    };
-    rl.drawTextEx(
-        customFont,
-        formattedText,
-        position,
-        fontSize,
-        lineSpacing,
-        textColor,
+        0.0,
+        Alignment.center,
     );
 
-    formattedText = try std.fmt.bufPrintZ(
-        &buffer,
+    try text.draw(
         "MAP: {d:02} / {d:02}",
         .{ mapNum, mapCount },
-    );
-    textSize = rl.measureTextEx(
-        customFont,
-        formattedText,
-        fontSize,
-        lineSpacing,
-    );
-    position = rl.Vector2{
-        .x = screenWidth - textSize.x - padding,
-        .y = padding,
-    };
-    rl.drawTextEx(
-        customFont,
-        formattedText,
-        position,
-        fontSize,
-        lineSpacing,
-        textColor,
+        0.0,
+        Alignment.left,
     );
 
-    formattedText = try std.fmt.bufPrintZ(
-        &buffer,
+    try text.draw(
         "Lines: {d}",
         .{lineCount},
-    );
-    textSize = rl.measureTextEx(
-        customFont,
-        formattedText,
-        fontSize,
-        lineSpacing,
-    );
-    position = rl.Vector2{
-        .x = screenWidth - textSize.x - padding,
-        .y = position.y + fontSize + lineSpacing,
-    };
-    rl.drawTextEx(
-        customFont,
-        formattedText,
-        position,
-        fontSize,
-        lineSpacing,
-        textColor,
+        0.0,
+        Alignment.right,
     );
 }
 
