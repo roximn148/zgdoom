@@ -35,6 +35,7 @@ from scratch, map out the layout coordinates, and draw the results safely onto t
     - [x] Conversion from DOOM world coordinate system to screen coordinate system.
     - [x] Map rendering in 2D using the Raylib engine.
     - [x] Basic UI overlay, keyboard and mouse interactive navigation.
+    - [x] Parameterized formatted UI text rending with custom font family/size, alignment, spacing and color.
 
 ## 📁 Repository Structure
 
