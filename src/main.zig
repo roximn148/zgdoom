@@ -274,6 +274,7 @@ pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
     const io = init.io;
 
+    // Args Parser -------------------------------------------------------------
     var parser = try args.ArgumentParser.init(
         init.arena.allocator(),
         .{ .name = "zgdoom" },
@@ -294,9 +295,8 @@ pub fn main(init: std.process.Init) !void {
 
     const wadFilename = result.getString("input").?;
     const verbose = result.getBool("verbose") orelse false;
+    _ = verbose; // for dump
     const level = result.getInt("level") orelse 0;
-    _ = verbose;
-    // _ = level;
 
     // Dump --------------------------------------------------------------------
     // try wad.dumpWad(
@@ -323,7 +323,7 @@ pub fn main(init: std.process.Init) !void {
         return;
     }
 
-    // File Reader -------------------------------------------------------------
+    // Load Lines --------------------------------------------------------------
     var mapLines = try std.ArrayList(MapLine).initCapacity(gpa, 1000);
     defer mapLines.deinit(gpa);
     var mapIndex: usize = if (0 <= level and level < mapIndices.len) @intCast(level) else 0;
@@ -342,21 +342,21 @@ pub fn main(init: std.process.Init) !void {
     // GUI Initialization
     rl.setConfigFlags(.{ .fullscreen_mode = true });
     rl.initWindow(0, 0, "ZgDoom");
-    defer rl.closeWindow(); // Close window and OpenGL context
+    defer rl.closeWindow();
     rl.setTargetFPS(10);
-
-    var camera: rl.Camera2D = autoFitCamera(mapLines.items);
 
     const customFont = try rl.loadFont("resources/Orbitron-SemiBold.ttf");
     defer rl.unloadFont(customFont);
 
+    var camera: rl.Camera2D = autoFitCamera(mapLines.items);
+
     //--------------------------------------------------------------------------
-    // Main game loop
-    while (!rl.windowShouldClose()) { // Detect window close button or ESC key
+    // Main loop
+    while (!rl.windowShouldClose()) {
+        //----------------------------------------------------------------------
         // Update
         if (rl.isKeyPressed(rl.KeyboardKey.page_down)) {
             mapIndex = (mapIndex + 1) % mapIndices.len;
-            // std.debug.print("MapIndex={d}\n", .{mapIndex});
             try readMapLines(
                 gpa,
                 io,
@@ -371,7 +371,6 @@ pub fn main(init: std.process.Init) !void {
         if (rl.isKeyPressed(rl.KeyboardKey.page_up)) {
             const newIndex = mapIndex -| 1;
             mapIndex = if (newIndex == mapIndex) mapIndices.len - 1 else newIndex;
-            // std.debug.print("MapIndex={d}\n", .{mapIndex});
             try readMapLines(
                 gpa,
                 io,
@@ -390,10 +389,14 @@ pub fn main(init: std.process.Init) !void {
 
         rl.clearBackground(rl.Color.black);
 
-        // Triggers user pan tracking, zoom math adjustments, and maps lines
         drawWadMap(mapLines.items, &camera);
 
-        try drawUi(customFont, mapIndex + 1, mapIndices.len, mapLines.items.len);
+        try drawUi(
+            customFont,
+            mapIndex + 1,
+            mapIndices.len,
+            mapLines.items.len,
+        );
         //----------------------------------------------------------------------
     }
 }
