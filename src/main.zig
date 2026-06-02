@@ -291,26 +291,49 @@ pub fn main(init: std.process.Init) !void {
     // Args Parser -------------------------------------------------------------
     var parser = try args.ArgumentParser.init(
         init.arena.allocator(),
-        .{ .name = "zgdoom" },
+        .{
+            .name = "zgdoom",
+            .config = args.Config.production(),
+        },
     );
     defer parser.deinit();
     try parser.addPositional("input", .{
         .help = "Input WAD file to process",
     });
 
-    try parser.addFlag("verbose", .{ .short = 'v' });
-    try parser.addIntOption("level", .{
+    try parser.addUintOption("level", .{
         .short = 'l',
-        .help = "Map Index",
+        .help = "Starting map index (1 indexed). Default: 1",
     });
 
-    var result = try parser.parseProcess(init);
+    try parser.addFlag("fullscreen", .{
+        .short = 'f',
+        .help = "Show full screen. Default: disabled",
+    });
+    try parser.addFlag("maximized", .{
+        .short = 'x',
+        .help = "Show maximized window. Default: disabled",
+    });
+    try parser.addUintOption("monitor", .{
+        .short = 'm',
+        .help = "Show on specific monitor (1 indexed). Default: 1",
+    });
+
+    try parser.addFlag("verbose", .{
+        .short = 'v',
+        .help = "Enable verbose output. Default: disabled",
+    });
+
+    var result = parser.parseProcessOr(init, onError);
     defer result.deinit();
 
     const wadFilename = result.getString("input").?;
-    const verbose = result.getBool("verbose") orelse false;
+    const verbose = result.getOrBool("verbose", false);
     _ = verbose; // for dump
-    const level = result.getInt("level") orelse 0;
+    const isFullscreen = result.getOrBool("fullscreen", false);
+    const isMaximized = result.getOrBool("maximized", false);
+    var level = result.getOrUint("level", 1);
+    var monitor: i32 = @as(i32, @intCast(result.getOrUint("monitor", 1)));
 
     // Dump --------------------------------------------------------------------
     // try wad.dumpWad(
@@ -338,11 +361,21 @@ pub fn main(init: std.process.Init) !void {
     }
 
     // Load Lines --------------------------------------------------------------
-    var mapLines = try std.ArrayList(MapLine).initCapacity(gpa, 1000);
+    var mapLines = try std.ArrayList(MapLine).initCapacity(
+        gpa,
+        1000,
+    );
     defer mapLines.deinit(gpa);
-    var mapIndex: usize = if (0 <= level and level < mapIndices.len) @intCast(level) else 0;
-    std.debug.print("MapIndex={d}\n", .{mapIndex});
+    // Ensure user selected map index is in valid range [1 to LevelCount].
+    if (level < 1) {
+        level = 1;
+    } else if (level > mapIndices.len) {
+        level = mapIndices.len;
+    }
+    // Convert to 0-indexed usize
+    var mapIndex: usize = @as(usize, @intCast(level)) - 1;
 
+    // Load lines data
     try readMapLines(
         gpa,
         io,
@@ -354,9 +387,31 @@ pub fn main(init: std.process.Init) !void {
 
     //--------------------------------------------------------------------------
     // GUI Initialization
-    rl.setConfigFlags(.{ .fullscreen_mode = true });
-    rl.initWindow(0, 0, "ZgDoom");
+    if (isFullscreen) {
+        rl.setConfigFlags(.{ .fullscreen_mode = true });
+    } else {
+        rl.setConfigFlags(.{ .window_resizable = true });
+    }
+    rl.initWindow(
+        800,
+        480,
+        "ZgDoom",
+    );
     defer rl.closeWindow();
+    // Ensure user selected map index is in valid range [1 to LevelCount].
+    if (monitor > rl.getMonitorCount()) {
+        monitor = rl.getMonitorCount();
+    }
+    if (monitor < 1) {
+        monitor = 1;
+    }
+    // Convert to 0-indexed usize
+    monitor -= 1;
+    rl.setWindowMonitor(monitor);
+
+    if (!isFullscreen and isMaximized) {
+        rl.maximizeWindow();
+    }
     rl.setTargetFPS(10);
 
     const customFont = try rl.loadFont("resources/Orbitron-SemiBold.ttf");
