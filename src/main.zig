@@ -8,7 +8,7 @@ const wad = @import("doom.zig");
 const rl = @import("raylib");
 
 ////////////////////////////////////////////////////////////////////////////////
-const Line = struct {
+const MapLine = struct {
     v1: rl.Vector2,
     v2: rl.Vector2,
     flags: u16,
@@ -18,10 +18,11 @@ const Line = struct {
 pub fn readMapLines(
     gpa: std.mem.Allocator,
     io: std.Io,
+    lineList: *std.ArrayList(MapLine),
     lumps: []wad.FileLump,
     mapLumpIndex: usize,
     ifile: []const u8,
-) ![]Line {
+) !void {
     const vertexes = try wad.readVertexes(
         gpa,
         io,
@@ -38,22 +39,25 @@ pub fn readMapLines(
     );
     defer gpa.free(lineDefs);
 
-    var lines = try gpa.alloc(Line, lineDefs.len);
-    for (0..lines.len) |i| {
+    try lineList.ensureTotalCapacity(gpa, lineDefs.len);
+    lineList.items.len = lineDefs.len;
+
+    for (lineList.items, 0..) |*line, i| {
         const lineDef = lineDefs[i];
         const v1 = vertexes[@intCast(lineDef.vdx1)];
         const v2 = vertexes[@intCast(lineDef.vdx2)];
-        lines[i].v1 = rl.Vector2{
-            .x = @as(f32, @floatFromInt(v1.x)),
-            .y = -@as(f32, @floatFromInt(v1.y)),
+        line.* = .{
+            .v1 = rl.Vector2{
+                .x = @as(f32, @floatFromInt(v1.x)),
+                .y = -@as(f32, @floatFromInt(v1.y)),
+            },
+            .v2 = rl.Vector2{
+                .x = @as(f32, @floatFromInt(v2.x)),
+                .y = -@as(f32, @floatFromInt(v2.y)),
+            },
+            .flags = @bitCast(lineDefs[i].flags),
         };
-        lines[i].v2 = rl.Vector2{
-            .x = @as(f32, @floatFromInt(v2.x)),
-            .y = -@as(f32, @floatFromInt(v2.y)),
-        };
-        lines[i].flags = @bitCast(lineDefs[i].flags);
     }
-    return lines;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -67,7 +71,7 @@ inline fn larger(f1: f32, f2: f32) f32 {
 ////////////////////////////////////////////////////////////////////////////////
 /// Creates an optimized default camera layout centering the map
 /// while explicitly calculating aspect ratio fitting scales.
-pub fn initAutoFitCamera(lines: []const Line) rl.Camera2D {
+pub fn autoFitCamera(lines: []const MapLine) rl.Camera2D {
     if (lines.len == 0) return rl.Camera2D{
         .offset = .{ .x = 0, .y = 0 },
         .target = .{ .x = 0, .y = 0 },
@@ -119,7 +123,7 @@ pub fn initAutoFitCamera(lines: []const Line) rl.Camera2D {
 /// Renders the Doom 2D level map with fully managed camera transformations,
 /// aspect-ratio preservation, and pan/zoom interactivity.
 pub fn drawWadMap(
-    lines: []const Line,
+    lines: []const MapLine,
     camera: *rl.Camera2D,
 ) void {
     // Interactivity: Process Zooming relative to the mouse pointer
@@ -233,24 +237,27 @@ pub fn main(init: std.process.Init) !void {
     }
 
     // File Reader -------------------------------------------------------------
+    var mapLines = try std.ArrayList(MapLine).initCapacity(gpa, 1000);
+    defer mapLines.deinit(gpa);
     const mapIndex: usize = if (0 <= level and level < mapIndices.len) @intCast(level) else 0;
-    const lines = try readMapLines(
+
+    try readMapLines(
         gpa,
         io,
+        &mapLines,
         lumps,
         mapIndices[mapIndex],
         wadFilename,
     );
-    defer gpa.free(lines);
 
     //--------------------------------------------------------------------------
     // GUI Initialization
     rl.setConfigFlags(.{ .fullscreen_mode = true });
-    rl.initWindow(0, 0, "ZDoom");
+    rl.initWindow(0, 0, "ZgDoom");
     defer rl.closeWindow(); // Close window and OpenGL context
 
     rl.setTargetFPS(60); // Set our game to run at 60 frames-per-second
-    var camera: rl.Camera2D = initAutoFitCamera(lines);
+    var camera: rl.Camera2D = autoFitCamera(mapLines.items);
 
     //--------------------------------------------------------------------------
     // Main game loop
@@ -265,7 +272,7 @@ pub fn main(init: std.process.Init) !void {
         rl.clearBackground(rl.Color.black);
 
         // Triggers user pan tracking, zoom math adjustments, and maps lines
-        drawWadMap(lines, &camera);
+        drawWadMap(mapLines.items, &camera);
         //----------------------------------------------------------------------
     }
 }
