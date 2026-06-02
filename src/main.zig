@@ -188,7 +188,7 @@ pub fn drawUi(
     mapCount: usize,
     lineCount: usize,
 ) !void {
-    const fontSize = 12;
+    const fontSize = 20;
     const padding = 10;
     const lineSpacing = 5;
     const textColor = rl.Color.gold;
@@ -347,7 +347,7 @@ pub fn main(init: std.process.Init) !void {
 
     var camera: rl.Camera2D = autoFitCamera(mapLines.items);
 
-    const customFont = try rl.loadFont("resources/Syncopate-Bold.ttf"); // **
+    const customFont = try rl.loadFont("resources/Orbitron-SemiBold.ttf");
     defer rl.unloadFont(customFont);
 
     //--------------------------------------------------------------------------
