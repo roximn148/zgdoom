@@ -61,14 +61,6 @@ pub fn readMapLines(
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-inline fn smaller(f1: f32, f2: f32) f32 {
-    return if (f1 < f2) f1 else f2;
-}
-inline fn larger(f1: f32, f2: f32) f32 {
-    return if (f1 > f2) f1 else f2;
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// Creates an optimized default camera layout centering the map
 /// while explicitly calculating aspect ratio fitting scales.
 pub fn autoFitCamera(lines: []const MapLine) rl.Camera2D {
@@ -85,12 +77,12 @@ pub fn autoFitCamera(lines: []const MapLine) rl.Camera2D {
     var maxY: f32 = -32768.0;
 
     for (lines) |l| {
-        minX = smaller(minX, smaller(l.v1.x, l.v2.x));
-        maxX = larger(maxX, larger(l.v1.x, l.v2.x));
+        minX = @min(minX, @min(l.v1.x, l.v2.x));
+        maxX = @max(maxX, @max(l.v1.x, l.v2.x));
 
         // Invert Y-axis to original values
-        minY = smaller(minY, larger(-l.v1.y, -l.v2.y));
-        maxY = larger(maxY, larger(-l.v1.y, -l.v2.y));
+        minY = @min(minY, @min(-l.v1.y, -l.v2.y));
+        maxY = @max(maxY, @max(-l.v1.y, -l.v2.y));
     }
 
     const mapWidth = maxX - minX;
@@ -367,11 +359,7 @@ pub fn main(init: std.process.Init) !void {
     );
     defer mapLines.deinit(gpa);
     // Ensure user selected map index is in valid range [1 to LevelCount].
-    if (level < 1) {
-        level = 1;
-    } else if (level > mapIndices.len) {
-        level = mapIndices.len;
-    }
+    level = @max(1, @min(level, mapIndices.len));
     // Convert to 0-indexed usize
     var mapIndex: usize = @as(usize, @intCast(level)) - 1;
 
@@ -399,15 +387,10 @@ pub fn main(init: std.process.Init) !void {
     );
     defer rl.closeWindow();
     // Ensure user selected map index is in valid range [1 to LevelCount].
-    if (monitor > rl.getMonitorCount()) {
-        monitor = rl.getMonitorCount();
-    }
-    if (monitor < 1) {
-        monitor = 1;
-    }
+    const monitorCount: i32 = rl.getMonitorCount();
+    monitor = if (monitorCount < 1) 0 else @max(1, @min(monitor, monitorCount));
     // Convert to 0-indexed usize
-    monitor -= 1;
-    rl.setWindowMonitor(monitor);
+    rl.setWindowMonitor(monitor - 1);
 
     if (!isFullscreen and isMaximized) {
         rl.maximizeWindow();
