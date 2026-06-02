@@ -324,18 +324,18 @@ pub fn main(init: std.process.Init) !void {
         .help = "Enable verbose output. Default: disabled",
     });
 
-    var result = parser.parseProcessOr(init, onError);
+    var result = try parser.parseProcess(init);
     defer result.deinit();
 
     const wadFilename = result.getString("input").?;
     const verbose = result.getOrBool("verbose", false);
-    _ = verbose; // for dump
     const isFullscreen = result.getOrBool("fullscreen", false);
     const isMaximized = result.getOrBool("maximized", false);
     var level = result.getOrUint("level", 1);
     var monitor: i32 = @as(i32, @intCast(result.getOrUint("monitor", 1)));
 
     // Dump --------------------------------------------------------------------
+    _ = verbose; // for dump
     // try wad.dumpWad(
     //     gpa,
     //     std.Io.File.stdout(),
