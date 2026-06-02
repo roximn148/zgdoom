@@ -182,24 +182,90 @@ pub fn drawWadMap(
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-pub fn drawUi(mapNum: usize, mapCount: usize, lineCount: usize) void {
-    const fontSize = 20;
+pub fn drawUi(
+    customFont: rl.Font,
+    mapNum: usize,
+    mapCount: usize,
+    lineCount: usize,
+) !void {
+    const fontSize = 12;
     const padding = 10;
     const lineSpacing = 5;
+    const textColor = rl.Color.gold;
+    const screenWidth = @as(f32, @floatFromInt(rl.getScreenWidth()));
 
-    rl.drawText("ZgDoom", padding, padding, fontSize, rl.Color.white);
+    var buffer: [256]u8 = undefined;
+    var formattedText = try std.fmt.bufPrintZ(
+        &buffer,
+        "ZgDoom",
+        .{},
+    );
+    var textSize = rl.measureTextEx(
+        customFont,
+        formattedText,
+        fontSize,
+        lineSpacing,
+    );
+    var position = rl.Vector2{
+        .x = padding,
+        .y = padding,
+    };
+    rl.drawTextEx(
+        customFont,
+        formattedText,
+        position,
+        fontSize,
+        lineSpacing,
+        textColor,
+    );
 
-    const py1 = padding;
-    const text1 = rl.textFormat("MAP: %d / %d", .{ mapNum, mapCount });
-    const text1Width = rl.measureText(text1, fontSize);
-    const px1 = rl.getScreenWidth() - text1Width - padding;
-    rl.drawText(text1, px1, py1, fontSize, rl.Color.white);
+    formattedText = try std.fmt.bufPrintZ(
+        &buffer,
+        "MAP: {d:02} / {d:02}",
+        .{ mapNum, mapCount },
+    );
+    textSize = rl.measureTextEx(
+        customFont,
+        formattedText,
+        fontSize,
+        lineSpacing,
+    );
+    position = rl.Vector2{
+        .x = screenWidth - textSize.x - padding,
+        .y = padding,
+    };
+    rl.drawTextEx(
+        customFont,
+        formattedText,
+        position,
+        fontSize,
+        lineSpacing,
+        textColor,
+    );
 
-    const py2 = py1 + fontSize + lineSpacing;
-    const text2 = rl.textFormat("Lines: %d", .{lineCount});
-    const text2Width = rl.measureText(text2, fontSize);
-    const px2 = rl.getScreenWidth() - text2Width - padding;
-    rl.drawText(text2, px2, py2, fontSize, rl.Color.white);
+    formattedText = try std.fmt.bufPrintZ(
+        &buffer,
+        "Lines: {d}",
+        .{lineCount},
+    );
+    textSize = rl.measureTextEx(
+        customFont,
+        formattedText,
+        fontSize,
+        lineSpacing,
+    );
+    position = rl.Vector2{
+        .x = screenWidth - textSize.x - padding,
+        .y = position.y + fontSize + lineSpacing,
+    };
+    rl.drawTextEx(
+        customFont,
+        formattedText,
+        position,
+        fontSize,
+        lineSpacing,
+        textColor,
+    );
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -210,7 +276,7 @@ pub fn main(init: std.process.Init) !void {
 
     var parser = try args.ArgumentParser.init(
         init.arena.allocator(),
-        .{ .name = "zdoom" },
+        .{ .name = "zgdoom" },
     );
     defer parser.deinit();
     try parser.addPositional("input", .{
@@ -276,11 +342,13 @@ pub fn main(init: std.process.Init) !void {
     // GUI Initialization
     rl.setConfigFlags(.{ .fullscreen_mode = true });
     rl.initWindow(0, 0, "ZgDoom");
-    rl.setWindowMonitor(rl.getMonitorCount() - 1); // Show on last monitor (if muliple monitors)
     defer rl.closeWindow(); // Close window and OpenGL context
-
     rl.setTargetFPS(10);
+
     var camera: rl.Camera2D = autoFitCamera(mapLines.items);
+
+    const customFont = try rl.loadFont("resources/Syncopate-Bold.ttf"); // **
+    defer rl.unloadFont(customFont);
 
     //--------------------------------------------------------------------------
     // Main game loop
@@ -325,7 +393,7 @@ pub fn main(init: std.process.Init) !void {
         // Triggers user pan tracking, zoom math adjustments, and maps lines
         drawWadMap(mapLines.items, &camera);
 
-        drawUi(mapIndex + 1, mapIndices.len, mapLines.items.len);
+        try drawUi(customFont, mapIndex + 1, mapIndices.len, mapLines.items.len);
         //----------------------------------------------------------------------
     }
 }
