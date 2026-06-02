@@ -182,6 +182,27 @@ pub fn drawWadMap(
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+pub fn drawUi(mapNum: usize, mapCount: usize, lineCount: usize) void {
+    const fontSize = 20;
+    const padding = 10;
+    const lineSpacing = 5;
+
+    rl.drawText("ZgDoom", padding, padding, fontSize, rl.Color.white);
+
+    const py1 = padding;
+    const text1 = rl.textFormat("MAP: %d / %d", .{ mapNum, mapCount });
+    const text1Width = rl.measureText(text1, fontSize);
+    const px1 = rl.getScreenWidth() - text1Width - padding;
+    rl.drawText(text1, px1, py1, fontSize, rl.Color.white);
+
+    const py2 = py1 + fontSize + lineSpacing;
+    const text2 = rl.textFormat("Lines: %d", .{lineCount});
+    const text2Width = rl.measureText(text2, fontSize);
+    const px2 = rl.getScreenWidth() - text2Width - padding;
+    rl.drawText(text2, px2, py2, fontSize, rl.Color.white);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 pub fn main(init: std.process.Init) !void {
     // Memory Allocator --------------------------------------------------------
     const gpa = init.gpa;
@@ -239,7 +260,8 @@ pub fn main(init: std.process.Init) !void {
     // File Reader -------------------------------------------------------------
     var mapLines = try std.ArrayList(MapLine).initCapacity(gpa, 1000);
     defer mapLines.deinit(gpa);
-    const mapIndex: usize = if (0 <= level and level < mapIndices.len) @intCast(level) else 0;
+    var mapIndex: usize = if (0 <= level and level < mapIndices.len) @intCast(level) else 0;
+    std.debug.print("MapIndex={d}\n", .{mapIndex});
 
     try readMapLines(
         gpa,
@@ -254,15 +276,44 @@ pub fn main(init: std.process.Init) !void {
     // GUI Initialization
     rl.setConfigFlags(.{ .fullscreen_mode = true });
     rl.initWindow(0, 0, "ZgDoom");
+    rl.setWindowMonitor(rl.getMonitorCount() - 1); // Show on last monitor (if muliple monitors)
     defer rl.closeWindow(); // Close window and OpenGL context
 
-    rl.setTargetFPS(60); // Set our game to run at 60 frames-per-second
+    rl.setTargetFPS(10);
     var camera: rl.Camera2D = autoFitCamera(mapLines.items);
 
     //--------------------------------------------------------------------------
     // Main game loop
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
         // Update
+        if (rl.isKeyPressed(rl.KeyboardKey.page_down)) {
+            mapIndex = (mapIndex + 1) % mapIndices.len;
+            // std.debug.print("MapIndex={d}\n", .{mapIndex});
+            try readMapLines(
+                gpa,
+                io,
+                &mapLines,
+                lumps,
+                mapIndices[mapIndex],
+                wadFilename,
+            );
+            camera = autoFitCamera(mapLines.items);
+        }
+
+        if (rl.isKeyPressed(rl.KeyboardKey.page_up)) {
+            const newIndex = mapIndex -| 1;
+            mapIndex = if (newIndex == mapIndex) mapIndices.len - 1 else newIndex;
+            // std.debug.print("MapIndex={d}\n", .{mapIndex});
+            try readMapLines(
+                gpa,
+                io,
+                &mapLines,
+                lumps,
+                mapIndices[mapIndex],
+                wadFilename,
+            );
+            camera = autoFitCamera(mapLines.items);
+        }
 
         //----------------------------------------------------------------------
         // Draw
@@ -273,6 +324,8 @@ pub fn main(init: std.process.Init) !void {
 
         // Triggers user pan tracking, zoom math adjustments, and maps lines
         drawWadMap(mapLines.items, &camera);
+
+        drawUi(mapIndex + 1, mapIndices.len, mapLines.items.len);
         //----------------------------------------------------------------------
     }
 }
