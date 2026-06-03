@@ -10,7 +10,7 @@ const AutoHashMap = std.hash_map.AutoHashMap;
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Print formatted output to fixed sized buffer, truncating any overflows
-fn fmtFixBuffer(buffer: []u8, comptime fmt: []const u8, params: anytype) [:0]u8 {
+fn fmtFixedBuffer(buffer: []u8, comptime fmt: []const u8, params: anytype) [:0]u8 {
     // 1. Reserve the last byte for our null-terminator sentinel
     const maxSafeLength = buffer.len - 1;
     const safeBuffer = buffer[0..maxSafeLength];
@@ -258,14 +258,18 @@ pub fn drawWadMap(
             radius,
             thing.flags,
         );
-        rl.drawLineEx(center, lineEnd, 1.0, rl.Color.black);
-        rl.drawCircleV(center, 3.0, rl.Color.black);
+        rl.drawLineEx(center, lineEnd, 2.0, rl.Color.black);
+        rl.drawCircleV(
+            center,
+            3.0,
+            if (thing.flags & 0x0010 != 0) rl.Color.dark_green else rl.Color.black,
+        );
 
         var label: [:0]u8 = undefined;
         if (thingNames.get(thing.id)) |name| {
-            label = fmtFixBuffer(&buffer, "{s}", .{name});
+            label = fmtFixedBuffer(&buffer, "{s}", .{name});
         } else {
-            label = fmtFixBuffer(&buffer, "[{d}]", .{thing.id});
+            label = fmtFixedBuffer(&buffer, "[{d}]", .{thing.id});
         }
 
         const textWidth = rl.measureText(label, fontSize);
@@ -300,15 +304,14 @@ const UiText = struct {
         self: Self,
         comptime txt: []const u8,
         params: anytype,
-        lineNum: f32,
+        lineNum: u32,
         alignment: Alignment,
     ) !void {
         var localBuffer: [256]u8 = undefined;
-        const formattedText: [:0]u8 = try std.fmt.bufPrintSentinel(
+        const formattedText: [:0]u8 = fmtFixedBuffer(
             &localBuffer,
             txt,
             params,
-            0,
         );
         const textSize = rl.measureTextEx(
             self.font,
@@ -321,7 +324,7 @@ const UiText = struct {
             .center => (self.uiWidth - textSize.x) / 2.0,
             .right => self.uiWidth - textSize.x,
         };
-        const y: f32 = lineNum * (textSize.y + self.lineSpacing);
+        const y: f32 = @as(f32, @floatFromInt(lineNum)) * (textSize.y + self.lineSpacing);
 
         rl.drawTextEx(
             self.font,
@@ -343,6 +346,7 @@ pub fn drawUi(
     mapNum: usize,
     mapCount: usize,
     lineCount: usize,
+    camera: *rl.Camera2D,
 ) !void {
     const margin = 10.0;
     var text = UiText{
@@ -359,21 +363,27 @@ pub fn drawUi(
     try text.draw(
         "ZgDoom",
         .{},
-        0.0,
+        0,
         Alignment.center,
     );
 
     try text.draw(
         "MAP: {d:02} / {d:02}",
         .{ mapNum, mapCount },
-        0.0,
+        0,
         Alignment.left,
     );
 
     try text.draw(
         "Lines: {d}",
         .{lineCount},
-        0.0,
+        0,
+        Alignment.right,
+    );
+    try text.draw(
+        "Zoom: {d:.1}%",
+        .{camera.zoom},
+        1,
         Alignment.right,
     );
 }
@@ -566,6 +576,14 @@ pub fn main(init: std.process.Init) !void {
             camera = autoFitCamera(mapLines.items);
         }
 
+        if (rl.isKeyPressed(rl.KeyboardKey.home)) {
+            camera = autoFitCamera(mapLines.items);
+        }
+
+        if (rl.isKeyPressed(rl.KeyboardKey.kp_decimal)) {
+            camera.zoom = 1.0;
+        }
+
         //----------------------------------------------------------------------
         // Draw
         rl.beginDrawing();
@@ -585,6 +603,7 @@ pub fn main(init: std.process.Init) !void {
             mapIndex + 1,
             mapIndices.len,
             mapLines.items.len,
+            &camera,
         );
         //----------------------------------------------------------------------
     }
