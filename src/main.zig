@@ -61,6 +61,31 @@ pub fn readMapLines(
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+pub fn readMapThings(
+    gpa: std.mem.Allocator,
+    io: std.Io,
+    thingsList: *std.ArrayList(wad.Thing),
+    lumps: []wad.FileLump,
+    mapLumpIndex: usize,
+    ifile: []const u8,
+) !void {
+    const things = try wad.readThings(
+        gpa,
+        io,
+        &lumps[mapLumpIndex + 1],
+        ifile,
+    );
+    defer gpa.free(things);
+
+    try thingsList.ensureTotalCapacity(gpa, things.len);
+    thingsList.items.len = things.len;
+
+    for (thingsList.items, 0..) |*thing, i| {
+        thing.* = things[i];
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
 /// Creates an optimized default camera layout centering the map
 /// while explicitly calculating aspect ratio fitting scales.
 pub fn autoFitCamera(lines: []const MapLine) rl.Camera2D {
@@ -116,6 +141,7 @@ pub fn autoFitCamera(lines: []const MapLine) rl.Camera2D {
 /// aspect-ratio preservation, and pan/zoom interactivity.
 pub fn drawWadMap(
     lines: []const MapLine,
+    things: []const wad.Thing,
     camera: *rl.Camera2D,
 ) void {
     // Interactivity: Process Zooming relative to the mouse pointer
@@ -168,6 +194,26 @@ pub fn drawWadMap(
 
         // Draw crisp lines leveraging modern sub-pixel vector rendering vectors
         rl.drawLineV(line.v1, line.v2, lineColor);
+    }
+    for (things) |thing| {
+        const center = rl.Vector2{
+            .x = @as(f32, @floatFromInt(thing.x)),
+            .y = -@as(f32, @floatFromInt(thing.y)),
+        };
+        const radius = 10.0;
+        const angleDegrees = @as(f32, @floatFromInt(thing.angle));
+        const angleRadians = angleDegrees * (std.math.pi / 180.0);
+
+        // Calculate the end point of the radial line using trigonometry
+        const targetX = center.x + (radius * @cos(angleRadians));
+        // Note: We subtract for Y if you want 45° to point "up and right"
+        // because Raylib's Y-axis points downward.
+        const targetY = center.y - (radius * @sin(angleRadians));
+        const lineEnd = rl.Vector2{ .x = targetX, .y = targetY };
+
+        rl.drawCircleV(center, radius, rl.Color.sky_blue);
+        rl.drawLineEx(center, lineEnd, 1.0, rl.Color.maroon);
+        rl.drawCircleV(center, 3.0, rl.Color.maroon);
     }
 
     rl.endMode2D();
@@ -352,22 +398,36 @@ pub fn main(init: std.process.Init) !void {
         return;
     }
 
-    // Load Lines --------------------------------------------------------------
-    var mapLines = try std.ArrayList(MapLine).initCapacity(
-        gpa,
-        1000,
-    );
-    defer mapLines.deinit(gpa);
+    // Load Map Data -----------------------------------------------------------
     // Ensure user selected map index is in valid range [1 to LevelCount].
     level = @max(1, @min(level, mapIndices.len));
     // Convert to 0-indexed usize
     var mapIndex: usize = @as(usize, @intCast(level)) - 1;
 
-    // Load lines data
+    var mapLines = try std.ArrayList(MapLine).initCapacity(
+        gpa,
+        1000,
+    );
+    defer mapLines.deinit(gpa);
+    var mapThings = try std.ArrayList(wad.Thing).initCapacity(
+        gpa,
+        1000,
+    );
+    defer mapThings.deinit(gpa);
+
+    // Load map data
     try readMapLines(
         gpa,
         io,
         &mapLines,
+        lumps,
+        mapIndices[mapIndex],
+        wadFilename,
+    );
+    try readMapThings(
+        gpa,
+        io,
+        &mapThings,
         lumps,
         mapIndices[mapIndex],
         wadFilename,
@@ -417,6 +477,15 @@ pub fn main(init: std.process.Init) !void {
                 mapIndices[mapIndex],
                 wadFilename,
             );
+            try readMapThings(
+                gpa,
+                io,
+                &mapThings,
+                lumps,
+                mapIndices[mapIndex],
+                wadFilename,
+            );
+
             camera = autoFitCamera(mapLines.items);
         }
 
@@ -431,6 +500,14 @@ pub fn main(init: std.process.Init) !void {
                 mapIndices[mapIndex],
                 wadFilename,
             );
+            try readMapThings(
+                gpa,
+                io,
+                &mapThings,
+                lumps,
+                mapIndices[mapIndex],
+                wadFilename,
+            );
             camera = autoFitCamera(mapLines.items);
         }
 
@@ -441,7 +518,7 @@ pub fn main(init: std.process.Init) !void {
 
         rl.clearBackground(rl.Color.black);
 
-        drawWadMap(mapLines.items, &camera);
+        drawWadMap(mapLines.items, mapThings.items, &camera);
 
         try drawUi(
             customFont,
