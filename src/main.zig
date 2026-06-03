@@ -6,6 +6,50 @@ const std = @import("std");
 const args = @import("args");
 const wad = @import("doom.zig");
 const rl = @import("raylib");
+const AutoHashMap = std.hash_map.AutoHashMap;
+
+////////////////////////////////////////////////////////////////////////////////
+/// Print formatted output to fixed sized buffer, truncating any overflows
+fn fmtFixBuffer(buffer: []u8, comptime fmt: []const u8, params: anytype) [:0]u8 {
+    // 1. Reserve the last byte for our null-terminator sentinel
+    const maxSafeLength = buffer.len - 1;
+    const safeBuffer = buffer[0..maxSafeLength];
+    const written = std.fmt.bufPrint(safeBuffer, fmt, params) catch |err| switch (err) {
+        error.NoSpaceLeft => safeBuffer, // Truncation event; return the full safe slice
+    };
+    buffer[written.len] = 0;
+    return buffer[0..written.len :0];
+}
+
+////////////////////////////////////////////////////////////////////////////////
+pub fn drawFlagSegmentedCircle(
+    center: rl.Vector2,
+    radius: f32,
+    flags: i16,
+) void {
+    inline for (0..3) |i| {
+        const startAngle, const endAngle = switch (i) {
+            0 => .{ 0.0, 144.0 },
+            1 => .{ 144.0, 216.0 },
+            2 => .{ 216.0, 360.0 },
+            else => unreachable,
+        };
+        const drawColor = switch (i) {
+            0 => if ((flags & 0x0001) != 0) rl.Color.maroon else rl.Color.light_gray,
+            1 => if ((flags & 0x0002) != 0) rl.Color.orange else rl.Color.light_gray,
+            2 => if ((flags & 0x0004) != 0) rl.Color.yellow else rl.Color.light_gray,
+            else => unreachable,
+        };
+        rl.drawCircleSector(
+            center,
+            radius,
+            startAngle,
+            endAngle,
+            24,
+            drawColor,
+        );
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 const MapLine = struct {
@@ -142,6 +186,7 @@ pub fn autoFitCamera(lines: []const MapLine) rl.Camera2D {
 pub fn drawWadMap(
     lines: []const MapLine,
     things: []const wad.Thing,
+    thingNames: AutoHashMap(i16, []const u8),
     camera: *rl.Camera2D,
 ) void {
     // Interactivity: Process Zooming relative to the mouse pointer
@@ -184,17 +229,14 @@ pub fn drawWadMap(
     rl.beginMode2D(camera.*);
 
     for (lines) |line| {
-
-        // Differentiate line classifications visually using WAD Flags
-        // For example: Secret sectors vs structural wall parameters
         var lineColor = rl.Color.red;
         if ((line.flags & 0x0020) != 0) { // Standard Doom secret flag bitmask
             lineColor = rl.Color.yellow;
         }
-
-        // Draw crisp lines leveraging modern sub-pixel vector rendering vectors
         rl.drawLineV(line.v1, line.v2, lineColor);
     }
+    var buffer: [256]u8 = undefined;
+    const fontSize = 12;
     for (things) |thing| {
         const center = rl.Vector2{
             .x = @as(f32, @floatFromInt(thing.x)),
@@ -204,16 +246,32 @@ pub fn drawWadMap(
         const angleDegrees = @as(f32, @floatFromInt(thing.angle));
         const angleRadians = angleDegrees * (std.math.pi / 180.0);
 
-        // Calculate the end point of the radial line using trigonometry
+        // Calculate the end point of the radial line
         const targetX = center.x + (radius * @cos(angleRadians));
-        // Note: We subtract for Y if you want 45° to point "up and right"
-        // because Raylib's Y-axis points downward.
+        // Subtract for Y to point 45° "up and right"as Raylib's Y-axis points downward.
         const targetY = center.y - (radius * @sin(angleRadians));
         const lineEnd = rl.Vector2{ .x = targetX, .y = targetY };
 
-        rl.drawCircleV(center, radius, rl.Color.sky_blue);
-        rl.drawLineEx(center, lineEnd, 1.0, rl.Color.maroon);
-        rl.drawCircleV(center, 3.0, rl.Color.maroon);
+        // rl.drawCircleV(center, radius, rl.Color.sky_blue);
+        drawFlagSegmentedCircle(
+            center,
+            radius,
+            thing.flags,
+        );
+        rl.drawLineEx(center, lineEnd, 1.0, rl.Color.black);
+        rl.drawCircleV(center, 3.0, rl.Color.black);
+
+        var label: [:0]u8 = undefined;
+        if (thingNames.get(thing.id)) |name| {
+            label = fmtFixBuffer(&buffer, "{s}", .{name});
+        } else {
+            label = fmtFixBuffer(&buffer, "[{d}]", .{thing.id});
+        }
+
+        const textWidth = rl.measureText(label, fontSize);
+        const textX = @as(i32, @intFromFloat(center.x)) - @divTrunc(textWidth, 2);
+        const textY = @as(i32, @intFromFloat(center.y + radius)) + 5; // + Padding below circle
+        rl.drawText(label, textX, textY, fontSize, rl.Color.dark_gray);
     }
 
     rl.endMode2D();
@@ -404,18 +462,9 @@ pub fn main(init: std.process.Init) !void {
     // Convert to 0-indexed usize
     var mapIndex: usize = @as(usize, @intCast(level)) - 1;
 
-    var mapLines = try std.ArrayList(MapLine).initCapacity(
-        gpa,
-        1000,
-    );
+    // Load lines data
+    var mapLines = try std.ArrayList(MapLine).initCapacity(gpa, 0);
     defer mapLines.deinit(gpa);
-    var mapThings = try std.ArrayList(wad.Thing).initCapacity(
-        gpa,
-        1000,
-    );
-    defer mapThings.deinit(gpa);
-
-    // Load map data
     try readMapLines(
         gpa,
         io,
@@ -424,6 +473,10 @@ pub fn main(init: std.process.Init) !void {
         mapIndices[mapIndex],
         wadFilename,
     );
+
+    // Load things data
+    var mapThings = try std.ArrayList(wad.Thing).initCapacity(gpa, 0);
+    defer mapThings.deinit(gpa);
     try readMapThings(
         gpa,
         io,
@@ -432,6 +485,8 @@ pub fn main(init: std.process.Init) !void {
         mapIndices[mapIndex],
         wadFilename,
     );
+    var thingsNameMap = try wad.createThingsNameMap(gpa);
+    defer thingsNameMap.deinit();
 
     //--------------------------------------------------------------------------
     // GUI Initialization
@@ -518,7 +573,12 @@ pub fn main(init: std.process.Init) !void {
 
         rl.clearBackground(rl.Color.black);
 
-        drawWadMap(mapLines.items, mapThings.items, &camera);
+        drawWadMap(
+            mapLines.items,
+            mapThings.items,
+            thingsNameMap,
+            &camera,
+        );
 
         try drawUi(
             customFont,
