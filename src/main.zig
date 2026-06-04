@@ -355,7 +355,6 @@ const UiText = struct {
 
 ////////////////////////////////////////////////////////////////////////////////
 pub fn drawUi(
-    customFont: rl.Font,
     mapNum: usize,
     mapCount: usize,
     lineCount: usize,
@@ -594,12 +593,12 @@ pub fn main(init: std.process.Init) !void {
                 camera = autoFitCamera(mapLines.items);
             }
 
-            if (rl.isKeyPressed(rl.KeyboardKey.home)) {
+            if (rl.isKeyPressed(rl.KeyboardKey.kp_)) {
                 camera = autoFitCamera(mapLines.items);
             }
 
             if (rl.isKeyPressed(rl.KeyboardKey.kp_decimal)) {
-                camera.zoom = 1.0;
+                camera.zoom = if (camera.zoom == 1.0) 2.0 else if (camera.zoom == 2.0) 4.0 else 1.0;
             }
 
             //------------------------------------------------------------------
