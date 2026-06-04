@@ -139,25 +139,25 @@ pub fn autoFitCamera(lines: []const MapLine) rl.Camera2D {
         .zoom = 1,
     };
 
-    var minX: f32 = 32767.0;
-    var maxX: f32 = -32768.0;
-    var minY: f32 = 32767.0;
-    var maxY: f32 = -32768.0;
+    var minX: f32 = std.math.inf(f32);
+    var maxX: f32 = -std.math.inf(f32);
+    var minY: f32 = std.math.inf(f32);
+    var maxY: f32 = -std.math.inf(f32);
 
     for (lines) |l| {
         minX = @min(minX, @min(l.v1.x, l.v2.x));
         maxX = @max(maxX, @max(l.v1.x, l.v2.x));
 
         // Invert Y-axis to original values
-        minY = @min(minY, @min(-l.v1.y, -l.v2.y));
-        maxY = @max(maxY, @max(-l.v1.y, -l.v2.y));
+        minY = @min(minY, @min(l.v1.y, l.v2.y));
+        maxY = @max(maxY, @max(l.v1.y, l.v2.y));
     }
 
     const mapWidth = maxX - minX;
     const mapHeight = maxY - minY;
 
-    const centerX = minX + (mapWidth / 2.0);
-    const centerY = minY + (mapHeight / 2.0);
+    const mapCenterX = minX + (mapWidth / 2.0);
+    const mapCenterY = minY + (mapHeight / 2.0);
 
     const screenWidth = @as(f32, @floatFromInt(rl.getScreenWidth()));
     const screenHeight = @as(f32, @floatFromInt(rl.getScreenHeight()));
@@ -167,13 +167,12 @@ pub fn autoFitCamera(lines: []const MapLine) rl.Camera2D {
     const zoomY = screenHeight / mapHeight;
 
     // Choose the smaller zoom value to fit the map completely without stretching
-    const idealZoom = if (zoomX < zoomY) zoomX * 0.9 else zoomY * 0.9;
+    const idealZoom = @min(zoomX, zoomY) * 0.9;
 
     return rl.Camera2D{
         // Anchor point to the middle of the display window
         .offset = .{ .x = screenWidth / 2.0, .y = screenHeight / 2.0 },
-        // Track the map center while explicitly flattening the inverted Y
-        .target = .{ .x = centerX, .y = -centerY },
+        .target = .{ .x = mapCenterX, .y = mapCenterY },
         .rotation = 0.0,
         .zoom = idealZoom,
     };
