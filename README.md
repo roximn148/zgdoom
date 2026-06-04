@@ -27,6 +27,8 @@ from scratch, map out the layout coordinates, and draw the results safely onto t
     - [x] Defining, allocating and modifying `struct`s.
     - [x] Reading structs from `File` streams.
     - [x] Writing formatted output to `File` streams, including stdout.
+    - [x] Custom formatting of structs
+    - [x] Use of enum for labeling numeral values, both for programmer and user.
 - **Dependency Management**
     - [x] Adding and linking external dependency modules.
 - **Command Line Arguments**
@@ -35,7 +37,9 @@ from scratch, map out the layout coordinates, and draw the results safely onto t
     - [x] Conversion from DOOM world coordinate system to screen coordinate system.
     - [x] Map rendering in 2D using the Raylib engine.
     - [x] Basic UI overlay, keyboard and mouse interactive navigation.
+    - [x] Dynamic zoom adjustment; AutoFit and ActualSize.
     - [x] Parameterized formatted UI text rending with custom font family/size, alignment, spacing and color.
+    - [x] Circle, Sector drawing
 
 ## 📁 Repository Structure
 

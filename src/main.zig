@@ -186,7 +186,6 @@ pub fn autoFitCamera(lines: []const MapLine) rl.Camera2D {
 pub fn drawWadMap(
     lines: []const MapLine,
     things: []const wad.Thing,
-    thingNames: AutoHashMap(i16, []const u8),
     camera: *rl.Camera2D,
 ) void {
     // Interactivity: Process Zooming relative to the mouse pointer
@@ -266,10 +265,10 @@ pub fn drawWadMap(
         );
 
         var label: [:0]u8 = undefined;
-        if (thingNames.get(thing.id)) |name| {
-            label = fmtFixedBuffer(&buffer, "{s}", .{name});
+        if (std.enums.fromInt(wad.ThingType, thing.id)) |thingType| {
+            label = fmtFixedBuffer(&buffer, "{s}", .{thingType.toString()});
         } else {
-            label = fmtFixedBuffer(&buffer, "[{d}]", .{thing.id});
+            label = fmtFixedBuffer(&buffer, "?[{d}]", .{thing.id});
         }
 
         const textWidth = rl.measureText(label, fontSize);
@@ -346,7 +345,7 @@ pub fn drawUi(
     mapNum: usize,
     mapCount: usize,
     lineCount: usize,
-    camera: *rl.Camera2D,
+    camera: *const rl.Camera2D,
 ) !void {
     const margin = 10.0;
     var text = UiText{
@@ -425,6 +424,10 @@ pub fn main(init: std.process.Init) !void {
         .help = "Show on specific monitor (1 indexed). Default: 1",
     });
 
+    try parser.addFlag("dump", .{
+        .short = 'd',
+        .help = "Dump file contents to stdout and exit",
+    });
     try parser.addFlag("verbose", .{
         .short = 'v',
         .help = "Enable verbose output. Default: disabled",
@@ -434,178 +437,178 @@ pub fn main(init: std.process.Init) !void {
     defer result.deinit();
 
     const wadFilename = result.getString("input").?;
-    const verbose = result.getOrBool("verbose", false);
     const isFullscreen = result.getOrBool("fullscreen", false);
     const isMaximized = result.getOrBool("maximized", false);
     var level = result.getOrUint("level", 1);
     var monitor: i32 = @as(i32, @intCast(result.getOrUint("monitor", 1)));
+    const isDump = result.getOrBool("dump", false);
+    const isVerbose = result.getOrBool("verbose", false);
 
-    // Dump --------------------------------------------------------------------
-    _ = verbose; // for dump
-    // try wad.dumpWad(
-    //     gpa,
-    //     std.Io.File.stdout(),
-    //     io,
-    //     wadFilename,
-    //     verbose,
-    // );
-
-    // Read Directory ----------------------------------------------------------
-    const wadData = try wad.readWadDirectory(gpa, io, wadFilename);
-    defer gpa.free(wadData);
-
-    var wadDir: *wad.WadDirectory = @ptrCast(wadData.ptr);
-    const lumps: []wad.FileLump = @as(
-        [*]wad.FileLump,
-        @ptrCast(&wadDir.lumps),
-    )[0..wadDir.header.lumpCount];
-
-    const mapIndices = try wad.getMapIndexes(gpa, lumps);
-    defer gpa.free(mapIndices);
-    if (mapIndices.len == 0) {
-        return;
-    }
-
-    // Load Map Data -----------------------------------------------------------
-    // Ensure user selected map index is in valid range [1 to LevelCount].
-    level = @max(1, @min(level, mapIndices.len));
-    // Convert to 0-indexed usize
-    var mapIndex: usize = @as(usize, @intCast(level)) - 1;
-
-    // Load lines data
-    var mapLines = try std.ArrayList(MapLine).initCapacity(gpa, 0);
-    defer mapLines.deinit(gpa);
-    try readMapLines(
-        gpa,
-        io,
-        &mapLines,
-        lumps,
-        mapIndices[mapIndex],
-        wadFilename,
-    );
-
-    // Load things data
-    var mapThings = try std.ArrayList(wad.Thing).initCapacity(gpa, 0);
-    defer mapThings.deinit(gpa);
-    try readMapThings(
-        gpa,
-        io,
-        &mapThings,
-        lumps,
-        mapIndices[mapIndex],
-        wadFilename,
-    );
-    var thingsNameMap = try wad.createThingsNameMap(gpa);
-    defer thingsNameMap.deinit();
-
-    //--------------------------------------------------------------------------
-    // GUI Initialization
-    if (isFullscreen) {
-        rl.setConfigFlags(.{ .fullscreen_mode = true });
+    if (isDump) {
+        // Dump the file contents to stdout ------------------------------------
+        try wad.dumpWad(
+            gpa,
+            std.Io.File.stdout(),
+            io,
+            wadFilename,
+            isVerbose,
+        );
     } else {
-        rl.setConfigFlags(.{ .window_resizable = true });
-    }
-    rl.initWindow(
-        800,
-        480,
-        "ZgDoom",
-    );
-    defer rl.closeWindow();
-    // Ensure user selected map index is in valid range [1 to LevelCount].
-    const monitorCount: i32 = rl.getMonitorCount();
-    monitor = if (monitorCount < 1) 0 else @max(1, @min(monitor, monitorCount));
-    // Convert to 0-indexed usize
-    rl.setWindowMonitor(monitor - 1);
+        // Start GUI -----------------------------------------------------------
+        // Read Directory ------------------------------------------------------
+        const wadData = try wad.readWadDirectory(gpa, io, wadFilename);
+        defer gpa.free(wadData);
 
-    if (!isFullscreen and isMaximized) {
-        rl.maximizeWindow();
-    }
-    rl.setTargetFPS(10);
+        var wadDir: *wad.WadDirectory = @ptrCast(wadData.ptr);
+        const lumps: []wad.FileLump = @as(
+            [*]wad.FileLump,
+            @ptrCast(&wadDir.lumps),
+        )[0..wadDir.header.lumpCount];
 
-    const customFont = try rl.loadFont("resources/Orbitron-SemiBold.ttf");
-    defer rl.unloadFont(customFont);
-
-    var camera: rl.Camera2D = autoFitCamera(mapLines.items);
-
-    //--------------------------------------------------------------------------
-    // Main loop
-    while (!rl.windowShouldClose()) {
-        //----------------------------------------------------------------------
-        // Update
-        if (rl.isKeyPressed(rl.KeyboardKey.page_down)) {
-            mapIndex = (mapIndex + 1) % mapIndices.len;
-            try readMapLines(
-                gpa,
-                io,
-                &mapLines,
-                lumps,
-                mapIndices[mapIndex],
-                wadFilename,
-            );
-            try readMapThings(
-                gpa,
-                io,
-                &mapThings,
-                lumps,
-                mapIndices[mapIndex],
-                wadFilename,
-            );
-
-            camera = autoFitCamera(mapLines.items);
+        const mapIndices = try wad.getMapIndexes(gpa, lumps);
+        defer gpa.free(mapIndices);
+        if (mapIndices.len == 0) {
+            return;
         }
 
-        if (rl.isKeyPressed(rl.KeyboardKey.page_up)) {
-            const newIndex = mapIndex -| 1;
-            mapIndex = if (newIndex == mapIndex) mapIndices.len - 1 else newIndex;
-            try readMapLines(
-                gpa,
-                io,
-                &mapLines,
-                lumps,
-                mapIndices[mapIndex],
-                wadFilename,
-            );
-            try readMapThings(
-                gpa,
-                io,
-                &mapThings,
-                lumps,
-                mapIndices[mapIndex],
-                wadFilename,
-            );
-            camera = autoFitCamera(mapLines.items);
-        }
+        // Load Map Data -------------------------------------------------------
+        // Ensure user selected map index is in valid range [1 to LevelCount].
+        level = @max(1, @min(level, mapIndices.len));
+        // Convert to 0-indexed usize
+        var mapIndex: usize = @as(usize, @intCast(level)) - 1;
 
-        if (rl.isKeyPressed(rl.KeyboardKey.home)) {
-            camera = autoFitCamera(mapLines.items);
-        }
-
-        if (rl.isKeyPressed(rl.KeyboardKey.kp_decimal)) {
-            camera.zoom = 1.0;
-        }
-
-        //----------------------------------------------------------------------
-        // Draw
-        rl.beginDrawing();
-        defer rl.endDrawing();
-
-        rl.clearBackground(rl.Color.black);
-
-        drawWadMap(
-            mapLines.items,
-            mapThings.items,
-            thingsNameMap,
-            &camera,
+        // Load lines data
+        var mapLines = try std.ArrayList(MapLine).initCapacity(gpa, 0);
+        defer mapLines.deinit(gpa);
+        try readMapLines(
+            gpa,
+            io,
+            &mapLines,
+            lumps,
+            mapIndices[mapIndex],
+            wadFilename,
         );
 
-        try drawUi(
-            customFont,
-            mapIndex + 1,
-            mapIndices.len,
-            mapLines.items.len,
-            &camera,
+        // Load things data
+        var mapThings = try std.ArrayList(wad.Thing).initCapacity(gpa, 0);
+        defer mapThings.deinit(gpa);
+        try readMapThings(
+            gpa,
+            io,
+            &mapThings,
+            lumps,
+            mapIndices[mapIndex],
+            wadFilename,
         );
+
         //----------------------------------------------------------------------
+        // GUI Initialization
+        if (isFullscreen) {
+            rl.setConfigFlags(.{ .fullscreen_mode = true });
+        } else {
+            rl.setConfigFlags(.{ .window_resizable = true });
+        }
+        rl.initWindow(
+            800,
+            480,
+            "ZgDoom",
+        );
+        defer rl.closeWindow();
+        // Ensure user selected map index is in valid range [1 to LevelCount].
+        const monitorCount: i32 = rl.getMonitorCount();
+        monitor = if (monitorCount < 1) 0 else @max(1, @min(monitor, monitorCount));
+        // Convert to 0-indexed usize
+        rl.setWindowMonitor(monitor - 1);
+
+        if (!isFullscreen and isMaximized) {
+            rl.maximizeWindow();
+        }
+        rl.setTargetFPS(10);
+
+        const customFont = try rl.loadFont("resources/Orbitron-SemiBold.ttf");
+        defer rl.unloadFont(customFont);
+
+        var camera: rl.Camera2D = autoFitCamera(mapLines.items);
+
+        //----------------------------------------------------------------------
+        // Main loop
+        while (!rl.windowShouldClose()) {
+            //------------------------------------------------------------------
+            // Update
+            if (rl.isKeyPressed(rl.KeyboardKey.page_down)) {
+                mapIndex = (mapIndex + 1) % mapIndices.len;
+                try readMapLines(
+                    gpa,
+                    io,
+                    &mapLines,
+                    lumps,
+                    mapIndices[mapIndex],
+                    wadFilename,
+                );
+                try readMapThings(
+                    gpa,
+                    io,
+                    &mapThings,
+                    lumps,
+                    mapIndices[mapIndex],
+                    wadFilename,
+                );
+
+                camera = autoFitCamera(mapLines.items);
+            }
+
+            if (rl.isKeyPressed(rl.KeyboardKey.page_up)) {
+                const newIndex = mapIndex -| 1;
+                mapIndex = if (newIndex == mapIndex) mapIndices.len - 1 else newIndex;
+                try readMapLines(
+                    gpa,
+                    io,
+                    &mapLines,
+                    lumps,
+                    mapIndices[mapIndex],
+                    wadFilename,
+                );
+                try readMapThings(
+                    gpa,
+                    io,
+                    &mapThings,
+                    lumps,
+                    mapIndices[mapIndex],
+                    wadFilename,
+                );
+                camera = autoFitCamera(mapLines.items);
+            }
+
+            if (rl.isKeyPressed(rl.KeyboardKey.home)) {
+                camera = autoFitCamera(mapLines.items);
+            }
+
+            if (rl.isKeyPressed(rl.KeyboardKey.kp_decimal)) {
+                camera.zoom = 1.0;
+            }
+
+            //------------------------------------------------------------------
+            // Draw
+            rl.beginDrawing();
+            defer rl.endDrawing();
+
+            rl.clearBackground(rl.Color.black);
+
+            drawWadMap(
+                mapLines.items,
+                mapThings.items,
+                &camera,
+            );
+
+            try drawUi(
+                customFont,
+                mapIndex + 1,
+                mapIndices.len,
+                mapLines.items.len,
+                &camera,
+            );
+            //------------------------------------------------------------------
+        }
     }
 }
 
