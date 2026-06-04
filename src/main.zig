@@ -6,7 +6,6 @@ const std = @import("std");
 const args = @import("args");
 const wad = @import("doom.zig");
 const rl = @import("raylib");
-const AutoHashMap = std.hash_map.AutoHashMap;
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Print formatted output to fixed sized buffer, truncating any overflows
@@ -229,8 +228,10 @@ pub fn drawWadMap(
 
     for (lines) |line| {
         var lineColor = rl.Color.red;
-        if ((line.flags & 0x0020) != 0) { // Standard Doom secret flag bitmask
+        if ((line.flags & wad.ML_SECRET) != 0) {
             lineColor = rl.Color.yellow;
+        } else if ((line.flags & wad.ML_TWOSIDED) != 0) {
+            lineColor = rl.Color.brown;
         }
         rl.drawLineV(line.v1, line.v2, lineColor);
     }
