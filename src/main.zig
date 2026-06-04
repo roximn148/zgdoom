@@ -184,6 +184,7 @@ pub fn autoFitCamera(lines: []const MapLine) rl.Camera2D {
 pub fn drawWadMap(
     lines: []const MapLine,
     things: []const wad.Thing,
+    font: rl.Font,
     camera: *rl.Camera2D,
 ) void {
     // Interactivity: Process Zooming relative to the mouse pointer
@@ -235,7 +236,8 @@ pub fn drawWadMap(
         rl.drawLineV(line.v1, line.v2, lineColor);
     }
     var buffer: [256]u8 = undefined;
-    const fontSize = 12;
+    const fontSize = 10;
+    const charSpacing = 0.0;
     for (things) |thing| {
         const center = rl.Vector2{
             .x = @as(f32, @floatFromInt(thing.x)),
@@ -251,7 +253,6 @@ pub fn drawWadMap(
         const targetY = center.y - (radius * @sin(angleRadians));
         const lineEnd = rl.Vector2{ .x = targetX, .y = targetY };
 
-        // rl.drawCircleV(center, radius, rl.Color.sky_blue);
         drawFlagSegmentedCircle(
             center,
             radius,
@@ -271,10 +272,23 @@ pub fn drawWadMap(
             label = fmtFixedBuffer(&buffer, "?[{d}]", .{thing.id});
         }
 
-        const textWidth = rl.measureText(label, fontSize);
-        const textX = @as(i32, @intFromFloat(center.x)) - @divTrunc(textWidth, 2);
-        const textY = @as(i32, @intFromFloat(center.y + radius)) + 5; // + Padding below circle
-        rl.drawText(label, textX, textY, fontSize, rl.Color.dark_gray);
+        const textSize = rl.measureTextEx(
+            font,
+            label,
+            fontSize,
+            charSpacing,
+        );
+        rl.drawTextEx(
+            font,
+            label,
+            rl.Vector2{
+                .x = center.x - (textSize.x / 2.0),
+                .y = center.y + radius + 5,
+            },
+            fontSize,
+            charSpacing,
+            rl.Color.dark_gray,
+        );
     }
 
     rl.endMode2D();
@@ -345,17 +359,18 @@ pub fn drawUi(
     mapNum: usize,
     mapCount: usize,
     lineCount: usize,
+    font: rl.Font,
     camera: *const rl.Camera2D,
 ) !void {
     const margin = 10.0;
     var text = UiText{
         .uiWidth = @as(f32, @floatFromInt(rl.getScreenWidth())) - margin * 2.0,
         .uiHeight = @as(f32, @floatFromInt(rl.getScreenHeight())) - margin * 2.0,
-        .font = customFont,
-        .fontSize = 20.0,
+        .font = font,
+        .fontSize = 32.0,
         .padding = margin,
         .charSpacing = 1.0,
-        .lineSpacing = 5.0,
+        .lineSpacing = 3.0,
         .textColor = rl.Color.gold,
     };
 
@@ -367,7 +382,7 @@ pub fn drawUi(
     );
 
     try text.draw(
-        "MAP: {d:02} / {d:02}",
+        "MAP: {d:02}/{d:02}",
         .{ mapNum, mapCount },
         0,
         Alignment.left,
@@ -525,7 +540,7 @@ pub fn main(init: std.process.Init) !void {
         }
         rl.setTargetFPS(10);
 
-        const customFont = try rl.loadFont("resources/Orbitron-SemiBold.ttf");
+        const customFont = try rl.loadFont("resources/FiraCode-SemiBold.ttf");
         defer rl.unloadFont(customFont);
 
         var camera: rl.Camera2D = autoFitCamera(mapLines.items);
@@ -597,14 +612,15 @@ pub fn main(init: std.process.Init) !void {
             drawWadMap(
                 mapLines.items,
                 mapThings.items,
+                customFont,
                 &camera,
             );
 
             try drawUi(
-                customFont,
                 mapIndex + 1,
                 mapIndices.len,
                 mapLines.items.len,
+                customFont,
                 &camera,
             );
             //------------------------------------------------------------------
