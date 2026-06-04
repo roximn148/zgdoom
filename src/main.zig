@@ -394,7 +394,7 @@ pub fn drawUi(
         Alignment.right,
     );
     try text.draw(
-        "Zoom: {d:.1}%",
+        "Zoom: {d:.2}%",
         .{camera.zoom},
         1,
         Alignment.right,
@@ -545,11 +545,22 @@ pub fn main(init: std.process.Init) !void {
         var camera: rl.Camera2D = autoFitCamera(mapLines.items);
 
         //----------------------------------------------------------------------
+        // UI constants
+        const zoomMin: f32 = 0.05;
+        const zoomMax: f32 = 10.0;
+        const zoomStepMinor: f32 = 0.05;
+        const zoomStepMajor: f32 = 0.50;
+        const moveStepMinor: f32 = 10.0;
+        const moveStepMajor: f32 = 100.0;
+
+        //----------------------------------------------------------------------
         // Main loop
         while (!rl.windowShouldClose()) {
             //------------------------------------------------------------------
             // Update
-            if (rl.isKeyPressed(rl.KeyboardKey.page_down)) {
+            const isShiftDown = rl.isKeyDown(.left_shift) or rl.isKeyDown(.right_shift);
+
+            if (rl.isKeyPressed(.page_down)) {
                 mapIndex = (mapIndex + 1) % mapIndices.len;
                 try readMapLines(
                     gpa,
@@ -571,7 +582,7 @@ pub fn main(init: std.process.Init) !void {
                 camera = autoFitCamera(mapLines.items);
             }
 
-            if (rl.isKeyPressed(rl.KeyboardKey.page_up)) {
+            if (rl.isKeyPressed(.page_up)) {
                 const newIndex = mapIndex -| 1;
                 mapIndex = if (newIndex == mapIndex) mapIndices.len - 1 else newIndex;
                 try readMapLines(
@@ -593,12 +604,60 @@ pub fn main(init: std.process.Init) !void {
                 camera = autoFitCamera(mapLines.items);
             }
 
-            if (rl.isKeyPressed(rl.KeyboardKey.kp_)) {
+            if (rl.isKeyPressed(.kp_multiply)) {
                 camera = autoFitCamera(mapLines.items);
             }
 
-            if (rl.isKeyPressed(rl.KeyboardKey.kp_decimal)) {
+            if (rl.isKeyPressed(.kp_decimal)) {
                 camera.zoom = if (camera.zoom == 1.0) 2.0 else if (camera.zoom == 2.0) 4.0 else 1.0;
+            }
+
+            if (rl.isKeyDown(.kp_add)) {
+                if (isShiftDown) {
+                    camera.zoom = @max(zoomMin, @min(camera.zoom + zoomStepMajor, zoomMax));
+                } else {
+                    camera.zoom = @max(zoomMin, @min(camera.zoom + zoomStepMinor, zoomMax));
+                }
+            }
+
+            if (rl.isKeyDown(.kp_subtract)) {
+                if (isShiftDown) {
+                    camera.zoom = @max(zoomMin, @min(camera.zoom - zoomStepMajor, zoomMax));
+                } else {
+                    camera.zoom = @max(zoomMin, @min(camera.zoom - zoomStepMinor, zoomMax));
+                }
+            }
+
+            if (rl.isKeyDown(.up)) {
+                if (isShiftDown) {
+                    camera.target.y = camera.target.y - moveStepMajor;
+                } else {
+                    camera.target.y = camera.target.y - moveStepMinor;
+                }
+            }
+
+            if (rl.isKeyDown(.down)) {
+                if (isShiftDown) {
+                    camera.target.y = camera.target.y + moveStepMajor;
+                } else {
+                    camera.target.y = camera.target.y + moveStepMinor;
+                }
+            }
+
+            if (rl.isKeyDown(.left)) {
+                if (isShiftDown) {
+                    camera.target.x = camera.target.x - moveStepMajor;
+                } else {
+                    camera.target.x = camera.target.x - moveStepMinor;
+                }
+            }
+
+            if (rl.isKeyDown(.right)) {
+                if (isShiftDown) {
+                    camera.target.x = camera.target.x + moveStepMajor;
+                } else {
+                    camera.target.x = camera.target.x + moveStepMinor;
+                }
             }
 
             //------------------------------------------------------------------
