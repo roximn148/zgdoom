@@ -59,7 +59,7 @@ const MapLine = struct {
 
 ////////////////////////////////////////////////////////////////////////////////
 pub fn readMapLines(
-    gpa: std.mem.Allocator,
+    allocator: std.mem.Allocator,
     io: std.Io,
     lineList: *std.ArrayList(MapLine),
     lumps: []wad.FileLump,
@@ -67,22 +67,22 @@ pub fn readMapLines(
     ifile: []const u8,
 ) !void {
     const vertexes = try wad.readVertexes(
-        gpa,
+        allocator,
         io,
         &lumps[mapLumpIndex + 4],
         ifile,
     );
-    defer gpa.free(vertexes);
+    defer allocator.free(vertexes);
 
     const lineDefs = try wad.readLineDefs(
-        gpa,
+        allocator,
         io,
         &lumps[mapLumpIndex + 2],
         ifile,
     );
-    defer gpa.free(lineDefs);
+    defer allocator.free(lineDefs);
 
-    try lineList.ensureTotalCapacity(gpa, lineDefs.len);
+    try lineList.ensureTotalCapacity(allocator, lineDefs.len);
     lineList.items.len = lineDefs.len;
 
     for (lineList.items, 0..) |*line, i| {
@@ -105,7 +105,7 @@ pub fn readMapLines(
 
 ////////////////////////////////////////////////////////////////////////////////
 pub fn readMapThings(
-    gpa: std.mem.Allocator,
+    allocator: std.mem.Allocator,
     io: std.Io,
     thingsList: *std.ArrayList(wad.Thing),
     lumps: []wad.FileLump,
@@ -113,14 +113,14 @@ pub fn readMapThings(
     ifile: []const u8,
 ) !void {
     const things = try wad.readThings(
-        gpa,
+        allocator,
         io,
         &lumps[mapLumpIndex + 1],
         ifile,
     );
-    defer gpa.free(things);
+    defer allocator.free(things);
 
-    try thingsList.ensureTotalCapacity(gpa, things.len);
+    try thingsList.ensureTotalCapacity(allocator, things.len);
     thingsList.items.len = things.len;
 
     for (thingsList.items, 0..) |*thing, i| {
@@ -762,7 +762,7 @@ pub fn drawWorldGrid(
     majorColor: rl.Color,
     axisColor: rl.Color,
 ) void {
-    const minScreenInterval: f32 = 50.0;
+    const minScreenInterval: f32 = 25.0;
     const rawStep = minScreenInterval / camera.zoom;
     const power = @ceil(std.math.log2(rawStep / minScreenInterval));
     const factor = std.math.pow(f32, 2.0, power);
@@ -772,8 +772,14 @@ pub fn drawWorldGrid(
     const screenWidth = @as(f32, @floatFromInt(rl.getScreenWidth()));
     const screenHeight = @as(f32, @floatFromInt(rl.getScreenHeight()));
 
-    const topLeft = rl.getScreenToWorld2D(rl.Vector2{ .x = 0.0, .y = 0.0 }, camera);
-    const bottomRight = rl.getScreenToWorld2D(rl.Vector2{ .x = screenWidth, .y = screenHeight }, camera);
+    const topLeft = rl.getScreenToWorld2D(rl.Vector2{
+        .x = 0.0,
+        .y = 0.0,
+    }, camera);
+    const bottomRight = rl.getScreenToWorld2D(rl.Vector2{
+        .x = screenWidth,
+        .y = screenHeight,
+    }, camera);
 
     // 2. Compute loop boundaries snapped to the minor step size
     const startX = @as(i32, @intFromFloat(@floor(topLeft.x / fMinorStep) * fMinorStep));
@@ -811,8 +817,14 @@ pub fn drawWorldGrid(
     // X Axis (Horizontal Line along Y = 0)
     if (topLeft.y <= 0.0 and bottomRight.y >= 0.0) {
         rl.drawLineV(
-            rl.getWorldToScreen2D(rl.Vector2{ .x = topLeft.x, .y = 0.0 }, camera),
-            rl.getWorldToScreen2D(rl.Vector2{ .x = bottomRight.x, .y = 0.0 }, camera),
+            rl.getWorldToScreen2D(rl.Vector2{
+                .x = topLeft.x,
+                .y = 0.0,
+            }, camera),
+            rl.getWorldToScreen2D(rl.Vector2{
+                .x = bottomRight.x,
+                .y = 0.0,
+            }, camera),
             axisColor,
         );
     }
@@ -820,8 +832,14 @@ pub fn drawWorldGrid(
     // Y Axis (Vertical Line along X = 0)
     if (topLeft.x <= 0.0 and bottomRight.x >= 0.0) {
         rl.drawLineV(
-            rl.getWorldToScreen2D(rl.Vector2{ .x = 0.0, .y = topLeft.y }, camera),
-            rl.getWorldToScreen2D(rl.Vector2{ .x = 0.0, .y = bottomRight.y }, camera),
+            rl.getWorldToScreen2D(rl.Vector2{
+                .x = 0.0,
+                .y = topLeft.y,
+            }, camera),
+            rl.getWorldToScreen2D(rl.Vector2{
+                .x = 0.0,
+                .y = bottomRight.y,
+            }, camera),
             axisColor,
         );
     }
@@ -1161,7 +1179,7 @@ pub fn main(init: std.process.Init) !void {
                 camera,
                 rl.Color.dark_gray,
                 rl.Color.white,
-                rl.Color.dark_gray,
+                rl.Color{ .r = 40, .g = 40, .b = 40, .a = 255 },
             );
 
             drawWadMap(
