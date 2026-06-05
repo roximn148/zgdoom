@@ -40,6 +40,9 @@ from scratch, map out the layout coordinates, and draw the results safely onto t
     - [x] Dynamic zoom adjustment; AutoFit and ActualSize.
     - [x] Parameterized formatted UI text rending with custom font family/size, alignment, spacing and color.
     - [x] Circle, Sector drawing
+    - [x] Screen <-> World coordinate mapping and transformation
+    - [x] Sprite loading and texture drawing
+    - [x] Customizing cursor
 
 ## 📁 Repository Structure
 
