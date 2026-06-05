@@ -601,7 +601,7 @@ pub const ThingType = enum(i16) {
 
 ////////////////////////////////////////////////////////////////////////////////
 pub fn readWadDirectory(
-    gpa: std.mem.Allocator,
+    allocator: std.mem.Allocator,
     io: std.Io,
     ifile: []const u8,
 ) ![]align(4) u8 {
@@ -624,7 +624,7 @@ pub fn readWadDirectory(
     // 1. Calculate total memory needed
     const totalSize = @sizeOf(WadDirectory) + (@sizeOf(FileLump) * wadHeader.lumpCount);
     // 2. Allocate raw aligned memory
-    const buffer: []align(4) u8 = try gpa.allocWithOptions(
+    const buffer: []align(4) u8 = try allocator.allocWithOptions(
         u8,
         totalSize,
         std.mem.Alignment.@"4",
@@ -659,14 +659,14 @@ pub fn getMapCount(lumps: []FileLump) u32 {
 ///
 /// This function dynamically allocates memory for the returned slice.
 /// The caller takes full ownership of the returned slice and is responsible
-/// for destroying it using `gpa.free()`.
+/// for destroying it using `allocator.free()`.
 ///
 /// Errors:
 /// - `error.OutOfMemory` if the heap allocation fails.
-pub fn getMapIndexes(gpa: std.mem.Allocator, lumps: []FileLump) ![]usize {
+pub fn getMapIndexes(allocator: std.mem.Allocator, lumps: []FileLump) ![]usize {
     // Determine the array size and allocate
     const count: u32 = getMapCount(lumps);
-    var indices = try gpa.alloc(usize, count);
+    var indices = try allocator.alloc(usize, count);
 
     // Cursor to track position in indices array
     var idx: usize = 0;
@@ -691,7 +691,7 @@ const WadError = error{
 
 ////////////////////////////////////////////////////////////////////////////////
 pub fn readThings(
-    gpa: std.mem.Allocator,
+    allocator: std.mem.Allocator,
     io: std.Io,
     thingsLump: *const FileLump,
     ifile: []const u8,
@@ -714,7 +714,7 @@ pub fn readThings(
 
     // Things Lump -------------------------------------------------------------
     const N = thingsLump.size / @sizeOf(Thing);
-    const things = try gpa.alloc(Thing, N);
+    const things = try allocator.alloc(Thing, N);
 
     try reader.seekTo(thingsLump.filePosition);
     for (0..things.len) |j| {
@@ -725,7 +725,7 @@ pub fn readThings(
 
 ////////////////////////////////////////////////////////////////////////////////
 pub fn readLineDefs(
-    gpa: std.mem.Allocator,
+    allocator: std.mem.Allocator,
     io: std.Io,
     lineDefsLump: *const FileLump,
     ifile: []const u8,
@@ -747,7 +747,7 @@ pub fn readLineDefs(
 
     // LineDefs Lump -----------------------------------------------------------
     const N = lineDefsLump.size / @sizeOf(LineDef);
-    const lineDefs = try gpa.alloc(LineDef, N);
+    const lineDefs = try allocator.alloc(LineDef, N);
 
     try reader.seekTo(lineDefsLump.filePosition);
     for (0..lineDefs.len) |j| {
@@ -758,7 +758,7 @@ pub fn readLineDefs(
 
 ////////////////////////////////////////////////////////////////////////////////
 pub fn readSideDefs(
-    gpa: std.mem.Allocator,
+    allocator: std.mem.Allocator,
     io: std.Io,
     sideDefsLump: *const FileLump,
     ifile: []const u8,
@@ -780,7 +780,7 @@ pub fn readSideDefs(
 
     // SideDefs Lump -----------------------------------------------------------
     const N = sideDefsLump.size / @sizeOf(SideDef);
-    const sideDefs = try gpa.alloc(SideDef, N);
+    const sideDefs = try allocator.alloc(SideDef, N);
 
     try reader.seekTo(sideDefsLump.filePosition);
     for (0..sideDefs.len) |j| {
@@ -791,7 +791,7 @@ pub fn readSideDefs(
 
 ////////////////////////////////////////////////////////////////////////////////
 pub fn readVertexes(
-    gpa: std.mem.Allocator,
+    allocator: std.mem.Allocator,
     io: std.Io,
     vertexesLump: *const FileLump,
     ifile: []const u8,
@@ -813,7 +813,7 @@ pub fn readVertexes(
 
     // Vertexes Lump -----------------------------------------------------------
     const N = vertexesLump.size / @sizeOf(Vertex);
-    const vertexes = try gpa.alloc(Vertex, N);
+    const vertexes = try allocator.alloc(Vertex, N);
 
     try reader.seekTo(vertexesLump.filePosition);
     for (0..vertexes.len) |j| {
@@ -824,7 +824,7 @@ pub fn readVertexes(
 
 ////////////////////////////////////////////////////////////////////////////////
 pub fn readSegments(
-    gpa: std.mem.Allocator,
+    allocator: std.mem.Allocator,
     io: std.Io,
     segmentsLump: *const FileLump,
     ifile: []const u8,
@@ -846,7 +846,7 @@ pub fn readSegments(
 
     // Vertexes Lump -----------------------------------------------------------
     const N = segmentsLump.size / @sizeOf(Segment);
-    const segments = try gpa.alloc(Segment, N);
+    const segments = try allocator.alloc(Segment, N);
 
     try reader.seekTo(segmentsLump.filePosition);
     for (0..segments.len) |j| {
@@ -857,7 +857,7 @@ pub fn readSegments(
 
 ////////////////////////////////////////////////////////////////////////////////
 pub fn readSubSectors(
-    gpa: std.mem.Allocator,
+    allocator: std.mem.Allocator,
     io: std.Io,
     subSectorsLump: *const FileLump,
     ifile: []const u8,
@@ -879,7 +879,7 @@ pub fn readSubSectors(
 
     // Vertexes Lump -----------------------------------------------------------
     const N = subSectorsLump.size / @sizeOf(SubSector);
-    const subSectors = try gpa.alloc(SubSector, N);
+    const subSectors = try allocator.alloc(SubSector, N);
 
     try reader.seekTo(subSectorsLump.filePosition);
     for (0..subSectors.len) |j| {
@@ -890,7 +890,7 @@ pub fn readSubSectors(
 
 ////////////////////////////////////////////////////////////////////////////////
 pub fn readNodes(
-    gpa: std.mem.Allocator,
+    allocator: std.mem.Allocator,
     io: std.Io,
     nodesLump: *const FileLump,
     ifile: []const u8,
@@ -912,7 +912,7 @@ pub fn readNodes(
 
     // Vertexes Lump -----------------------------------------------------------
     const N = nodesLump.size / @sizeOf(Node);
-    const nodes = try gpa.alloc(Node, N);
+    const nodes = try allocator.alloc(Node, N);
 
     try reader.seekTo(nodesLump.filePosition);
     for (0..nodes.len) |j| {
@@ -923,7 +923,7 @@ pub fn readNodes(
 
 ////////////////////////////////////////////////////////////////////////////////
 pub fn readSectors(
-    gpa: std.mem.Allocator,
+    allocator: std.mem.Allocator,
     io: std.Io,
     sectorsLump: *const FileLump,
     ifile: []const u8,
@@ -945,7 +945,7 @@ pub fn readSectors(
 
     // Vertexes Lump -----------------------------------------------------------
     const N = sectorsLump.size / @sizeOf(Sector);
-    const sectors = try gpa.alloc(Sector, N);
+    const sectors = try allocator.alloc(Sector, N);
 
     try reader.seekTo(sectorsLump.filePosition);
     for (0..sectors.len) |j| {
@@ -956,15 +956,15 @@ pub fn readSectors(
 
 ////////////////////////////////////////////////////////////////////////////////
 pub fn dumpWad(
-    gpa: std.mem.Allocator,
+    allocator: std.mem.Allocator,
     ofile: std.Io.File,
     io: std.Io,
     ifile: []const u8,
     verbose: bool,
 ) !void {
     // Header + Directory ------------------------------------------------------
-    const wadData = try readWadDirectory(gpa, io, ifile);
-    defer gpa.free(wadData);
+    const wadData = try readWadDirectory(allocator, io, ifile);
+    defer allocator.free(wadData);
 
     var wad: *WadDirectory = @ptrCast(wadData.ptr);
     const lumps: []FileLump = @as(
@@ -982,8 +982,8 @@ pub fn dumpWad(
 
     // Maps --------------------------------------------------------------------
     fout(ofile, io, "*** {d} Maps found\n", .{getMapCount(lumps)});
-    const indices = try getMapIndexes(gpa, lumps);
-    defer gpa.free(indices);
+    const indices = try getMapIndexes(allocator, lumps);
+    defer allocator.free(indices);
     for (indices, 0..) |index, i| {
         fout(ofile, io, "Map{d:<2}: {s} (Lump{d})\n", .{
             i,
@@ -995,8 +995,8 @@ pub fn dumpWad(
     for (0..wad.header.lumpCount) |i| {
         // THINGS --------------------------------------------------------------
         if (std.mem.eql(u8, &lumps[i].name, &THINGS_ID)) {
-            const things: []Thing = try readThings(gpa, io, &lumps[i], ifile);
-            defer gpa.free(things);
+            const things: []Thing = try readThings(allocator, io, &lumps[i], ifile);
+            defer allocator.free(things);
 
             fout(
                 ofile,
@@ -1013,8 +1013,8 @@ pub fn dumpWad(
 
         // LINEDEFS ------------------------------------------------------------
         if (std.mem.eql(u8, &lumps[i].name, &LINEDEFS_ID)) {
-            const lineDefs: []LineDef = try readLineDefs(gpa, io, &lumps[i], ifile);
-            defer gpa.free(lineDefs);
+            const lineDefs: []LineDef = try readLineDefs(allocator, io, &lumps[i], ifile);
+            defer allocator.free(lineDefs);
 
             fout(
                 ofile,
@@ -1031,8 +1031,8 @@ pub fn dumpWad(
 
         // SIDEDEFS ------------------------------------------------------------
         if (std.mem.eql(u8, &lumps[i].name, &SIDEDEFS_ID)) {
-            const sideDefs: []SideDef = try readSideDefs(gpa, io, &lumps[i], ifile);
-            defer gpa.free(sideDefs);
+            const sideDefs: []SideDef = try readSideDefs(allocator, io, &lumps[i], ifile);
+            defer allocator.free(sideDefs);
 
             fout(
                 ofile,
@@ -1049,8 +1049,8 @@ pub fn dumpWad(
 
         // VERTEXES ------------------------------------------------------------
         if (std.mem.eql(u8, &lumps[i].name, &VERTEXES_ID)) {
-            const vertexes: []Vertex = try readVertexes(gpa, io, &lumps[i], ifile);
-            defer gpa.free(vertexes);
+            const vertexes: []Vertex = try readVertexes(allocator, io, &lumps[i], ifile);
+            defer allocator.free(vertexes);
 
             fout(
                 ofile,
@@ -1067,8 +1067,8 @@ pub fn dumpWad(
 
         // SEGS ----------------------------------------------------------------
         if (std.mem.eql(u8, &lumps[i].name, &SEGMENTS_ID)) {
-            const segments: []Segment = try readSegments(gpa, io, &lumps[i], ifile);
-            defer gpa.free(segments);
+            const segments: []Segment = try readSegments(allocator, io, &lumps[i], ifile);
+            defer allocator.free(segments);
 
             fout(
                 ofile,
@@ -1085,8 +1085,8 @@ pub fn dumpWad(
 
         // SSECTORS ------------------------------------------------------------
         if (std.mem.eql(u8, &lumps[i].name, &SUBSECTORS_ID)) {
-            const subSectors: []SubSector = try readSubSectors(gpa, io, &lumps[i], ifile);
-            defer gpa.free(subSectors);
+            const subSectors: []SubSector = try readSubSectors(allocator, io, &lumps[i], ifile);
+            defer allocator.free(subSectors);
 
             fout(
                 ofile,
@@ -1103,8 +1103,8 @@ pub fn dumpWad(
 
         // NODES ---------------------------------------------------------------
         if (std.mem.eql(u8, &lumps[i].name, &NODES_ID)) {
-            const nodes: []Node = try readNodes(gpa, io, &lumps[i], ifile);
-            defer gpa.free(nodes);
+            const nodes: []Node = try readNodes(allocator, io, &lumps[i], ifile);
+            defer allocator.free(nodes);
 
             fout(
                 ofile,
@@ -1121,8 +1121,8 @@ pub fn dumpWad(
 
         // SECTORS -------------------------------------------------------------
         if (std.mem.eql(u8, &lumps[i].name, &SECTORS_ID)) {
-            const sectors: []Sector = try readSectors(gpa, io, &lumps[i], ifile);
-            defer gpa.free(sectors);
+            const sectors: []Sector = try readSectors(allocator, io, &lumps[i], ifile);
+            defer allocator.free(sectors);
 
             fout(
                 ofile,
