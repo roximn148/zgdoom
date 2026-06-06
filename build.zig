@@ -103,6 +103,13 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("dvui", dvui_dep.module("dvui_raylib_zig"));
     exe.root_module.addImport("raylib-zig-backend", dvui_dep.module("raylib_zig")); // for zls
 
+    // -------------------------------------------------------------------------
+    // Only apply the icon when compiling for the Windows operating system
+    if (target.result.os.tag == .windows) {
+        exe.root_module.addWin32ResourceFile(.{
+            .file = b.path("src/icon.rc"),
+        });
+    }
 
     // -------------------------------------------------------------------------
     // This declares intent for the executable to be installed into the

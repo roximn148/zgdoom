@@ -11,6 +11,7 @@ const rl = RaylibBackend.raylib;
 comptime {
     std.debug.assert(@hasDecl(RaylibBackend, "RaylibBackend"));
 }
+const appIconFile = @embedFile("game-map.png");
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Print formatted output to fixed sized buffer, truncating any overflows
