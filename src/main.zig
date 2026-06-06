@@ -5,7 +5,12 @@
 const std = @import("std");
 const args = @import("args");
 const wad = @import("doom.zig");
-const rl = @import("raylib");
+const dvui = @import("dvui");
+const RaylibBackend = @import("raylib-zig-backend");
+const rl = RaylibBackend.raylib;
+comptime {
+    std.debug.assert(@hasDecl(RaylibBackend, "RaylibBackend"));
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Print formatted output to fixed sized buffer, truncating any overflows
