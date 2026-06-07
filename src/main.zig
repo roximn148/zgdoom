@@ -64,127 +64,27 @@ const MapLine = struct {
 };
 
 ////////////////////////////////////////////////////////////////////////////////
-pub fn readMapLines(
-    allocator: std.mem.Allocator,
-    io: std.Io,
-    lineList: *std.ArrayList(MapLine),
-    lumps: []wad.FileLump,
-    mapLumpIndex: usize,
-    ifile: []const u8,
-) !void {
-    const vertexes = try wad.readVertexes(
-        allocator,
-        io,
-        &lumps[mapLumpIndex + 4],
-        ifile,
-    );
-    defer allocator.free(vertexes);
-
-    const lineDefs = try wad.readLineDefs(
-        allocator,
-        io,
-        &lumps[mapLumpIndex + 2],
-        ifile,
-    );
-    defer allocator.free(lineDefs);
-
-    try lineList.ensureTotalCapacity(allocator, lineDefs.len);
-    lineList.items.len = lineDefs.len;
-
-    for (lineList.items, 0..) |*line, i| {
-        const lineDef = lineDefs[i];
-        const v1 = vertexes[@intCast(lineDef.vdx1)];
-        const v2 = vertexes[@intCast(lineDef.vdx2)];
-        line.* = .{
-            .v1 = rl.Vector2{
-                .x = @as(f32, @floatFromInt(v1.x)),
-                .y = -@as(f32, @floatFromInt(v1.y)),
-            },
-            .v2 = rl.Vector2{
-                .x = @as(f32, @floatFromInt(v2.x)),
-                .y = -@as(f32, @floatFromInt(v2.y)),
-            },
-            .flags = @bitCast(lineDefs[i].flags),
-        };
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-pub fn readMapThings(
-    allocator: std.mem.Allocator,
-    io: std.Io,
-    thingsList: *std.ArrayList(wad.Thing),
-    lumps: []wad.FileLump,
-    mapLumpIndex: usize,
-    ifile: []const u8,
-) !void {
-    const things = try wad.readThings(
-        allocator,
-        io,
-        &lumps[mapLumpIndex + 1],
-        ifile,
-    );
-    defer allocator.free(things);
-
-    try thingsList.ensureTotalCapacity(allocator, things.len);
-    thingsList.items.len = things.len;
-
-    for (thingsList.items, 0..) |*thing, i| {
-        thing.* = things[i];
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-pub fn getPlayer1Start(thingsList: []wad.Thing) rl.Vector2 {
-    var startPosition = rl.Vector2{ .x = 0.0, .y = 0.0 };
-    for (thingsList) |thing| {
-        if (std.enums.fromInt(wad.ThingType, thing.id)) |thingType| {
-            if (thingType == .Player1Start) {
-                startPosition.x = @as(f32, @floatFromInt(thing.x));
-                startPosition.y = -@as(f32, @floatFromInt(thing.y));
-                break;
-            }
-        }
-    }
-    return startPosition;
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// Creates an optimized default camera layout centering the map
 /// while explicitly calculating aspect ratio fitting scales.
-pub fn autoFitCamera(lines: []const MapLine) rl.Camera2D {
-    if (lines.len == 0) return rl.Camera2D{
+pub fn autoFitCamera(mapRect: *rl.Rectangle) rl.Camera2D {
+    if (mapRect.width == 0 or mapRect.height == 0) return rl.Camera2D{
         .offset = .{ .x = 0, .y = 0 },
         .target = .{ .x = 0, .y = 0 },
         .rotation = 0,
         .zoom = 1,
     };
 
-    var minX: f32 = std.math.inf(f32);
-    var maxX: f32 = -std.math.inf(f32);
-    var minY: f32 = std.math.inf(f32);
-    var maxY: f32 = -std.math.inf(f32);
-
-    for (lines) |l| {
-        minX = @min(minX, @min(l.v1.x, l.v2.x));
-        maxX = @max(maxX, @max(l.v1.x, l.v2.x));
-
-        // Invert Y-axis to original values
-        minY = @min(minY, @min(l.v1.y, l.v2.y));
-        maxY = @max(maxY, @max(l.v1.y, l.v2.y));
-    }
-
-    const mapWidth = maxX - minX;
-    const mapHeight = maxY - minY;
-
-    const mapCenterX = minX + (mapWidth / 2.0);
-    const mapCenterY = minY + (mapHeight / 2.0);
+    const mapCenterX = mapRect.x + (mapRect.width / 2.0);
+    const mapCenterY = mapRect.y + (mapRect.height / 2.0);
 
     const screenWidth = @as(f32, @floatFromInt(rl.getScreenWidth()));
     const screenHeight = @as(f32, @floatFromInt(rl.getScreenHeight()));
 
     // Aspect Ratio selection for zoom factor
-    const optimalZoom = @min(screenWidth / mapWidth, screenHeight / mapHeight) * 0.9;
+    const optimalZoom = @min(
+        screenWidth / mapRect.width,
+        screenHeight / mapRect.height,
+    ) * 0.9;
 
     return rl.Camera2D{
         // Anchor to the middle of the display window
@@ -200,15 +100,14 @@ pub fn autoFitCamera(lines: []const MapLine) rl.Camera2D {
 /// Renders the Doom 2D level map with fully managed camera transformations,
 /// aspect-ratio preservation, and pan/zoom interactivity.
 pub fn drawWadMap(
-    lines: []const MapLine,
-    things: []const wad.Thing,
+    appState: *AppState,
     font: rl.Font,
     camera: rl.Camera2D,
 ) void {
     rl.beginMode2D(camera);
 
     // -------------------------------------------------------------------------
-    for (lines) |line| {
+    for (appState.mapLines.items) |line| {
         var lineColor = rl.Color.red;
         if ((line.flags & wad.ML_SECRET) != 0) {
             lineColor = rl.Color.yellow;
@@ -223,7 +122,7 @@ pub fn drawWadMap(
     const fontSize = 10;
     const charSpacing = 0.0;
 
-    for (things) |thing| {
+    for (appState.things.items) |thing| {
         const center = rl.Vector2{
             .x = @as(f32, @floatFromInt(thing.x)),
             .y = -@as(f32, @floatFromInt(thing.y)),
@@ -234,7 +133,7 @@ pub fn drawWadMap(
 
         // Calculate the end point of the radial line
         const targetX = center.x + (radius * @cos(angleRadians));
-        // Subtract for Y to point 45° "up and right"as Raylib's Y-axis points downward.
+        // Subtract for Y to point 45° "up and right" as Raylib's Y-axis points downward.
         const targetY = center.y - (radius * @sin(angleRadians));
         const lineEnd = rl.Vector2{ .x = targetX, .y = targetY };
 
@@ -341,9 +240,7 @@ const UiText = struct {
 
 ////////////////////////////////////////////////////////////////////////////////
 pub fn drawUi(
-    mapNum: usize,
-    mapCount: usize,
-    lineCount: usize,
+    appState: *AppState,
     font: rl.Font,
     camera: rl.Camera2D,
 ) void {
@@ -361,9 +258,15 @@ pub fn drawUi(
 
     text.draw("ZgDoom", .{}, 0, Alignment.center);
 
-    text.draw("MAP: {d:02}/{d:02}", .{ mapNum, mapCount }, 0, Alignment.left);
+    const mapCount = if (appState.mapIndices) |mapIndices| mapIndices.len else 0;
+    text.draw(
+        "MAP: {d:02}/{d:02}",
+        .{ appState.currMapIndex + 1, mapCount },
+        0,
+        Alignment.left,
+    );
 
-    text.draw("Lines: {d}", .{lineCount}, 0, Alignment.right);
+    text.draw("Lines: {d}", .{appState.mapLines.items.len}, 0, Alignment.right);
     text.draw("Zoom: {d:.2}%", .{camera.zoom}, 1, Alignment.right);
 }
 
@@ -852,6 +755,258 @@ pub fn drawWorldGrid(
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+pub const AppState = struct {
+    const Self = @This();
+    allocator: std.mem.Allocator,
+    // App GUI
+    isMaximized: bool,
+    // App Data
+    wadInfo: ?[]align(4) u8,
+    wadDir: ?*wad.WadDirectory,
+    mapIndices: ?[]usize,
+    currMapIndex: usize,
+    mapDimensions: rl.Rectangle,
+    things: std.ArrayList(wad.Thing),
+    mapLines: std.ArrayList(MapLine),
+
+    // -------------------------------------------------------------------------
+    pub fn init(allocator: std.mem.Allocator) !Self {
+        const self = AppState{
+            .allocator = allocator,
+            .isMaximized = false,
+            .wadInfo = null,
+            .wadDir = null,
+            .mapIndices = null,
+            .currMapIndex = 0,
+            .mapDimensions = .{ .x = 0.0, .y = 0.0, .width = 0.0, .height = 0.0 },
+            .things = std.ArrayList(wad.Thing).empty,
+            .mapLines = std.ArrayList(MapLine).empty,
+        };
+        return self;
+    }
+
+    // -------------------------------------------------------------------------
+    pub fn deinit(self: *Self) void {
+        if (self.wadInfo) |wadInfo| {
+            self.allocator.free(wadInfo);
+            self.wadInfo = null;
+            self.wadDir = null;
+        }
+        if (self.mapIndices) |indices| {
+            self.allocator.free(indices);
+            self.mapIndices = null;
+        }
+        self.things.deinit(self.allocator);
+        self.mapLines.deinit(self.allocator);
+    }
+
+    // -------------------------------------------------------------------------
+    pub fn loadWadDirectory(self: *Self, io: std.Io, wadFilename: []const u8) void {
+        // appState.wadDir = @ptrCast(wadData.ptr);
+        const wadData = wad.readWadDirectory(
+            self.allocator,
+            io,
+            wadFilename,
+        ) catch |err| blk: {
+            std.debug.print("Failed to read WAD file! Error: {}\n", .{err});
+            break :blk null;
+        };
+        if (wadData == null) {
+            return;
+        } else {
+            self.wadInfo = wadData;
+            self.wadDir = @ptrCast(wadData.?.ptr);
+            if (self.getLumps()) |lumps| {
+                self.mapIndices = wad.getMapIndexes(
+                    self.allocator,
+                    lumps,
+                ) catch |err| blk: {
+                    std.debug.print("Failed to map indices! Error: {}\n", .{err});
+                    break :blk null;
+                };
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    pub fn getLumps(self: *Self) ?[]wad.FileLump {
+        if (self.wadDir) |wadDir| {
+            return @as(
+                [*]wad.FileLump,
+                @ptrCast(&wadDir.lumps),
+            )[0..wadDir.header.lumpCount];
+        } else {
+            return null;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    pub fn loadLevelData(
+        self: *Self,
+        io: std.Io,
+        wadFilename: []const u8,
+        levelIndex: usize,
+    ) void {
+        // ---------------------------------------------------------------------
+        if (self.wadDir == null) {
+            return;
+        }
+        if (self.mapIndices) |mapIndices| {
+            // ---------------------------------------------------------------------
+            self.currMapIndex = @max(0, @min(levelIndex, mapIndices.len - 1));
+            // ---------------------------------------------------------------------
+            self.readMapLines(
+                io,
+                wadFilename,
+                mapIndices[self.currMapIndex],
+            );
+            if (self.mapLines.items.len > 0) {
+                var minX: f32 = std.math.inf(f32);
+                var maxX: f32 = -std.math.inf(f32);
+                var minY: f32 = std.math.inf(f32);
+                var maxY: f32 = -std.math.inf(f32);
+
+                for (self.mapLines.items) |l| {
+                    minX = @min(minX, @min(l.v1.x, l.v2.x));
+                    maxX = @max(maxX, @max(l.v1.x, l.v2.x));
+
+                    // Invert Y-axis to original values
+                    minY = @min(minY, @min(l.v1.y, l.v2.y));
+                    maxY = @max(maxY, @max(l.v1.y, l.v2.y));
+                }
+
+                self.mapDimensions = .{
+                    .x = minX,
+                    .y = minY,
+                    .width = maxX - minX,
+                    .height = maxY - minY,
+                };
+            } else {
+                self.mapDimensions = .{
+                    .x = 0.0,
+                    .y = 0.0,
+                    .width = 0.0,
+                    .height = 0.0,
+                };
+            }
+
+            self.readMapThings(
+                io,
+                wadFilename,
+                mapIndices[self.currMapIndex],
+            );
+        }
+    }
+    ////////////////////////////////////////////////////////////////////////////////
+    pub fn readMapLines(
+        self: *Self,
+        io: std.Io,
+        ifile: []const u8,
+        mapLumpIndex: usize,
+    ) void {
+        if (self.getLumps()) |lumps| {
+            const vertexes = wad.readVertexes(
+                self.allocator,
+                io,
+                &lumps[mapLumpIndex + 4],
+                ifile,
+            ) catch |err| {
+                std.debug.print("Failed to read map vertexes! Error: {}\n", .{err});
+                return;
+            };
+            defer self.allocator.free(vertexes);
+
+            const lineDefs = wad.readLineDefs(
+                self.allocator,
+                io,
+                &lumps[mapLumpIndex + 2],
+                ifile,
+            ) catch |err| {
+                std.debug.print("Failed to read map lineDefs! Error: {}\n", .{err});
+                return;
+            };
+            defer self.allocator.free(lineDefs);
+
+            self.mapLines.ensureTotalCapacity(
+                self.allocator,
+                lineDefs.len,
+            ) catch |err| {
+                std.debug.print("Failed to allocate memory for map lines! Error: {}\n", .{err});
+                return;
+            };
+            self.mapLines.items.len = lineDefs.len;
+
+            for (self.mapLines.items, 0..) |*line, i| {
+                const lineDef = lineDefs[i];
+                const v1 = vertexes[@intCast(lineDef.vdx1)];
+                const v2 = vertexes[@intCast(lineDef.vdx2)];
+                line.* = .{
+                    .v1 = rl.Vector2{
+                        .x = @as(f32, @floatFromInt(v1.x)),
+                        .y = -@as(f32, @floatFromInt(v1.y)),
+                    },
+                    .v2 = rl.Vector2{
+                        .x = @as(f32, @floatFromInt(v2.x)),
+                        .y = -@as(f32, @floatFromInt(v2.y)),
+                    },
+                    .flags = @bitCast(lineDefs[i].flags),
+                };
+            }
+        }
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    pub fn readMapThings(
+        self: *Self,
+        io: std.Io,
+        ifile: []const u8,
+        mapLumpIndex: usize,
+    ) void {
+        if (self.getLumps()) |lumps| {
+            const things = wad.readThings(
+                self.allocator,
+                io,
+                &lumps[mapLumpIndex + 1],
+                ifile,
+            ) catch |err| {
+                std.debug.print("Failed to read map vertexes! Error: {}\n", .{err});
+                return;
+            };
+            defer self.allocator.free(things);
+
+            self.things.ensureTotalCapacity(
+                self.allocator,
+                things.len,
+            ) catch |err| {
+                std.debug.print("Failed to allocate memory for map things! Error: {}\n", .{err});
+                return;
+            };
+
+            self.things.items.len = things.len;
+
+            for (self.things.items, 0..) |*thing, i| {
+                thing.* = things[i];
+            }
+        }
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////
+    pub fn getPlayer1Start(self: Self) rl.Vector2 {
+        var startPosition = rl.Vector2{ .x = 0.0, .y = 0.0 };
+        for (self.things.items) |thing| {
+            if (std.enums.fromInt(wad.ThingType, thing.id)) |thingType| {
+                if (thingType == .Player1Start) {
+                    startPosition.x = @as(f32, @floatFromInt(thing.x));
+                    startPosition.y = -@as(f32, @floatFromInt(thing.y));
+                    break;
+                }
+            }
+        }
+        return startPosition;
+    }
+};
+
+////////////////////////////////////////////////////////////////////////////////
 pub fn main(init: std.process.Init) !void {
     // Memory Allocator --------------------------------------------------------
     const allocator = init.gpa;
@@ -918,56 +1073,26 @@ pub fn main(init: std.process.Init) !void {
             isVerbose,
         );
     } else {
-        // Start GUI -----------------------------------------------------------
+        // Application level data initialization -----------------------------------
+        var appState = try AppState.init(allocator);
+        defer appState.deinit();
+
         // Read Directory ------------------------------------------------------
-        const wadData = try wad.readWadDirectory(allocator, io, wadFilename);
-        defer allocator.free(wadData);
-
-        var wadDir: *wad.WadDirectory = @ptrCast(wadData.ptr);
-        const lumps: []wad.FileLump = @as(
-            [*]wad.FileLump,
-            @ptrCast(&wadDir.lumps),
-        )[0..wadDir.header.lumpCount];
-
-        const mapIndices = try wad.getMapIndexes(allocator, lumps);
-        defer allocator.free(mapIndices);
-        if (mapIndices.len == 0) {
-            return;
-        }
+        appState.loadWadDirectory(io, wadFilename);
 
         // Load Map Data -------------------------------------------------------
-        // Ensure user selected map index is in valid range [1 to LevelCount].
-        level = @max(1, @min(level, mapIndices.len));
-        // Convert to 0-indexed usize
-        var mapIndex: usize = @as(usize, @intCast(level)) - 1;
+        if (appState.mapIndices) |mapIndices| {
+            // Ensure user selected map index is in valid range [1 to LevelCount].
+            level = @max(1, @min(level, mapIndices.len));
+            // Convert to 0-indexed usize
+            const levelIndex = @as(usize, @intCast(level)) - 1;
+            appState.loadLevelData(io, wadFilename, levelIndex);
+        }
 
-        // Load lines data
-        var mapLines = try std.ArrayList(MapLine).initCapacity(allocator, 0);
-        defer mapLines.deinit(allocator);
-        try readMapLines(
-            allocator,
-            io,
-            &mapLines,
-            lumps,
-            mapIndices[mapIndex],
-            wadFilename,
-        );
-
-        // Load things data
-        var mapThings = try std.ArrayList(wad.Thing).initCapacity(allocator, 0);
-        defer mapThings.deinit(allocator);
-        try readMapThings(
-            allocator,
-            io,
-            &mapThings,
-            lumps,
-            mapIndices[mapIndex],
-            wadFilename,
-        );
-        var playerStart = getPlayer1Start(mapThings.items);
+        var playerStart = appState.getPlayer1Start();
 
         //----------------------------------------------------------------------
-        // GUI Initialization
+        // GUI Initialization --------------------------------------------------
         if (isFullscreen) {
             rl.setConfigFlags(.{ .fullscreen_mode = true });
         } else {
@@ -979,12 +1104,14 @@ pub fn main(init: std.process.Init) !void {
             "ZgDoom",
         );
         defer rl.closeWindow();
-        // Ensure user selected map index is in valid range [1 to LevelCount].
+
+        // Ensure user selected monitor index is in valid range [1 to MonitorCount].
         const monitorCount: i32 = rl.getMonitorCount();
         monitor = if (monitorCount < 1) 0 else @max(1, @min(monitor, monitorCount));
         // Convert to 0-indexed usize
         rl.setWindowMonitor(monitor - 1);
 
+        // Maximized flag is only valid if not full screen
         if (!isFullscreen and isMaximized) {
             rl.maximizeWindow();
         }
@@ -1001,7 +1128,7 @@ pub fn main(init: std.process.Init) !void {
         const customFont = try rl.loadFont("resources/FiraCode-SemiBold.ttf");
         defer rl.unloadFont(customFont);
 
-        var camera: rl.Camera2D = autoFitCamera(mapLines.items);
+        var camera: rl.Camera2D = autoFitCamera(&appState.mapDimensions);
 
         //----------------------------------------------------------------------
         // UI constants
@@ -1020,48 +1147,29 @@ pub fn main(init: std.process.Init) !void {
             const isShiftDown = rl.isKeyDown(.left_shift) or rl.isKeyDown(.right_shift);
 
             if (rl.isKeyPressed(.page_down)) {
-                mapIndex = (mapIndex + 1) % mapIndices.len;
-                try readMapLines(
-                    allocator,
-                    io,
-                    &mapLines,
-                    lumps,
-                    mapIndices[mapIndex],
-                    wadFilename,
-                );
-                try readMapThings(
-                    allocator,
-                    io,
-                    &mapThings,
-                    lumps,
-                    mapIndices[mapIndex],
-                    wadFilename,
-                );
-                playerStart = getPlayer1Start(mapThings.items);
-                camera = autoFitCamera(mapLines.items);
+                if (appState.mapIndices) |mapIndices| {
+                    const newIndex = (appState.currMapIndex + 1) % mapIndices.len;
+                    appState.loadLevelData(
+                        io,
+                        wadFilename,
+                        newIndex,
+                    );
+                    playerStart = appState.getPlayer1Start();
+                    camera = autoFitCamera(&appState.mapDimensions);
+                }
             }
 
             if (rl.isKeyPressed(.page_up)) {
-                const newIndex = mapIndex -| 1;
-                mapIndex = if (newIndex == mapIndex) mapIndices.len - 1 else newIndex;
-                try readMapLines(
-                    allocator,
-                    io,
-                    &mapLines,
-                    lumps,
-                    mapIndices[mapIndex],
-                    wadFilename,
-                );
-                try readMapThings(
-                    allocator,
-                    io,
-                    &mapThings,
-                    lumps,
-                    mapIndices[mapIndex],
-                    wadFilename,
-                );
-                playerStart = getPlayer1Start(mapThings.items);
-                camera = autoFitCamera(mapLines.items);
+                if (appState.mapIndices) |mapIndices| {
+                    const newIndex = appState.currMapIndex -| 1;
+                    appState.loadLevelData(
+                        io,
+                        wadFilename,
+                        if (newIndex == appState.currMapIndex) mapIndices.len - 1 else newIndex,
+                    );
+                    playerStart = appState.getPlayer1Start();
+                    camera = autoFitCamera(&appState.mapDimensions);
+                }
             }
 
             if (rl.isKeyPressed(.kp_divide)) {
@@ -1073,7 +1181,7 @@ pub fn main(init: std.process.Init) !void {
             }
 
             if (rl.isKeyPressed(.kp_multiply)) {
-                camera = autoFitCamera(mapLines.items);
+                camera = autoFitCamera(&appState.mapDimensions);
             }
 
             if (rl.isKeyPressed(.kp_decimal)) {
@@ -1189,16 +1297,13 @@ pub fn main(init: std.process.Init) !void {
             );
 
             drawWadMap(
-                mapLines.items,
-                mapThings.items,
+                &appState,
                 customFont,
                 camera,
             );
 
             drawUi(
-                mapIndex + 1,
-                mapIndices.len,
-                mapLines.items.len,
+                &appState,
                 customFont,
                 camera,
             );
