@@ -49,7 +49,7 @@ from scratch, map out the layout coordinates, and draw the results safely onto t
     - [x] Screen <-> World coordinate mapping and transformation
     - [x] Dynamic sprite/texture loading and drawing
     - [x] Customizing cursor
--**DVUI**:
+- **DVUI**:
     - [x] Basic application build and initialization.
     - [x] Use raylib-zig backend and integration with raylib-zig drawing.
 
