@@ -3,6 +3,7 @@
 // This software is released under the MIT License.
 // /////////////////////////////////////////////////////////////////////////////
 const std = @import("std");
+const zlog = std.log.scoped(.zgdoom);
 const args = @import("args");
 const wad = @import("doom.zig");
 const dvui = @import("dvui");
@@ -632,6 +633,8 @@ pub fn createCursorTexture(
         .format = .uncompressed_r8g8b8a8,
     };
 
+    zlog.info("Created cursor texture {any}", .{cursorStyle});
+
     // Upload the raw color bytes directly to the GPU structure memory space
     return rl.loadTextureFromImage(img);
 }
@@ -808,12 +811,10 @@ pub const AppState = struct {
             io,
             wadFilename,
         ) catch |err| blk: {
-            std.debug.print("Failed to read WAD file! Error: {}\n", .{err});
+            zlog.err("Failed to read WAD file! Error: {}\n", .{err});
             break :blk null;
         };
-        if (wadData == null) {
-            return;
-        } else {
+        if (wadData != null) {
             self.wadInfo = wadData;
             self.wadDir = @ptrCast(wadData.?.ptr);
             if (self.getLumps()) |lumps| {
@@ -821,10 +822,15 @@ pub const AppState = struct {
                     self.allocator,
                     lumps,
                 ) catch |err| blk: {
-                    std.debug.print("Failed to map indices! Error: {}\n", .{err});
+                    zlog.err("Failed to read map indices! Error: {}\n", .{err});
                     break :blk null;
                 };
             }
+            zlog.info("Loaded WAD data from {s}: {d} lump(s) and {d} map(s).", .{
+                wadFilename,
+                self.wadDir.?.header.lumpCount,
+                if (self.mapIndices) |mapIndices| mapIndices.len else 0,
+            });
         }
     }
 
@@ -854,6 +860,7 @@ pub const AppState = struct {
         if (self.mapIndices) |mapIndices| {
             // ---------------------------------------------------------------------
             self.currMapIndex = @max(0, @min(levelIndex, mapIndices.len - 1));
+            zlog.info("Loading data for map# {d}...", .{self.currMapIndex});
             // ---------------------------------------------------------------------
             self.readMapLines(
                 io,
@@ -911,7 +918,7 @@ pub const AppState = struct {
                 &lumps[mapLumpIndex + 4],
                 ifile,
             ) catch |err| {
-                std.debug.print("Failed to read map vertexes! Error: {}\n", .{err});
+                zlog.err("Failed to read map vertexes! Error: {}\n", .{err});
                 return;
             };
             defer self.allocator.free(vertexes);
@@ -922,7 +929,7 @@ pub const AppState = struct {
                 &lumps[mapLumpIndex + 2],
                 ifile,
             ) catch |err| {
-                std.debug.print("Failed to read map lineDefs! Error: {}\n", .{err});
+                zlog.err("Failed to read map lineDefs! Error: {}\n", .{err});
                 return;
             };
             defer self.allocator.free(lineDefs);
@@ -931,7 +938,7 @@ pub const AppState = struct {
                 self.allocator,
                 lineDefs.len,
             ) catch |err| {
-                std.debug.print("Failed to allocate memory for map lines! Error: {}\n", .{err});
+                zlog.err("Failed to allocate memory for map lines! Error: {}\n", .{err});
                 return;
             };
             self.mapLines.items.len = lineDefs.len;
@@ -952,6 +959,7 @@ pub const AppState = struct {
                     .flags = @bitCast(lineDefs[i].flags),
                 };
             }
+            zlog.info("Read {d} lines for map{d}.", .{ self.mapLines.items.len, self.currMapIndex });
         }
     }
 
@@ -969,7 +977,7 @@ pub const AppState = struct {
                 &lumps[mapLumpIndex + 1],
                 ifile,
             ) catch |err| {
-                std.debug.print("Failed to read map vertexes! Error: {}\n", .{err});
+                zlog.err("Failed to read map vertexes! Error: {}\n", .{err});
                 return;
             };
             defer self.allocator.free(things);
@@ -978,7 +986,7 @@ pub const AppState = struct {
                 self.allocator,
                 things.len,
             ) catch |err| {
-                std.debug.print("Failed to allocate memory for map things! Error: {}\n", .{err});
+                zlog.err("Failed to allocate memory for map things! Error: {}\n", .{err});
                 return;
             };
 
@@ -987,6 +995,7 @@ pub const AppState = struct {
             for (self.things.items, 0..) |*thing, i| {
                 thing.* = things[i];
             }
+            zlog.info("Read {d} things for map{d}.", .{ self.things.items.len, self.currMapIndex });
         }
     }
 
