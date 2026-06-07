@@ -17,6 +17,7 @@ from scratch, map out the layout coordinates, and draw the results safely onto t
 - **Error Handling**:
     - [x] Managing errors using try, catch, and switch blocks.
     - [x] Creating and raising custom error.
+    - [x] Handling errors with catch block, with/without returning values.
     - [ ] Implementing error sets.
 - **Heap Allocation**:
     - [x] Tracking memory allocation lifespans, leaks and ownership using `std.heap.DebugAllocator`.
@@ -28,7 +29,12 @@ from scratch, map out the layout coordinates, and draw the results safely onto t
     - [x] Reading structs from `File` streams.
     - [x] Writing formatted output to `File` streams, including stdout.
     - [x] Custom formatting of structs
-    - [x] Use of enum for labeling numeral values, both for programmer and user.
+    - [x] Struct functions with dynamically allocated fields.
+    - [x] `init` and `deinit` struct functions with allocator usage.
+    - [x] Use of `enum` for labeling numeral values, both for programmer and user.
+- **Optional**
+    - [x] Creating and null initialized optional variables.
+    - [x] Handling null situation, with `.?`, `orelse` and `if`.
 - **Dependency Management**
     - [x] Adding and linking external dependency modules.
 - **Command Line Arguments**
@@ -41,8 +47,11 @@ from scratch, map out the layout coordinates, and draw the results safely onto t
     - [x] Parameterized formatted UI text rending with custom font family/size, alignment, spacing and color.
     - [x] Circle, Sector drawing
     - [x] Screen <-> World coordinate mapping and transformation
-    - [x] Sprite loading and texture drawing
+    - [x] Dynamic sprite/texture loading and drawing
     - [x] Customizing cursor
+-**DVUI**:
+    - [x] Basic application build and initialization.
+    - [x] Use raylib-zig backend and integration with raylib-zig drawing.
 
 ## 📁 Repository Structure
 
